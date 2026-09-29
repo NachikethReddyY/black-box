@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { URL } from "node:url";
-import { webcrypto } from "node:crypto";
+import { createPrivateKey, webcrypto } from "node:crypto";
 import { configFromEnv, selectRunner } from "../src/config";
 import { createAppJwt } from "../src/auth";
 import { verifyGitHubSignature, githubSignatureForTests } from "../src/signature";
@@ -55,6 +55,17 @@ test("App JWT uses RS256 and expected claims", async () => {
   assert.equal(JSON.parse(atob(header.replace(/-/g, "+").replace(/_/g, "/"))).alg, "RS256");
   assert.equal(JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))).iss, "42");
   assert.ok(signature.length > 0);
+});
+
+test("App JWT accepts GitHub's native PKCS#1 private key format", async () => {
+  const keyPair = await webcrypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
+  const pkcs8 = await webcrypto.subtle.exportKey("pkcs8", keyPair.privateKey);
+  const pem = createPrivateKey({ key: Buffer.from(pkcs8), format: "der", type: "pkcs8" }).export({ format: "pem", type: "pkcs1" }).toString();
+  assert.match(pem, /BEGIN RSA PRIVATE KEY/);
+  const jwt = await createAppJwt({ GITHUB_APP_ID: "42", GITHUB_APP_PRIVATE_KEY: pem }, 1_700_000_000);
+  const [header, payload, signature] = jwt.split(".");
+  const valid = await webcrypto.subtle.verify("RSASSA-PKCS1-v1_5", keyPair.publicKey, Buffer.from(signature, "base64url"), new TextEncoder().encode(`${header}.${payload}`));
+  assert.equal(valid, true);
 });
 
 test("repository allowlist and event dedupe are durable contracts", async () => {

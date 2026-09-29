@@ -16,6 +16,15 @@
 - [x] Integrate root setup guide, recovery guide, configuration examples, and local demo.
 - [x] Record final evidence, limitations and remaining live installation steps.
 
+Production setup completed on 29 September 2026:
+
+- [x] Create and install the private `Black Box CI` GitHub App on `NachikethReddyY`.
+- [x] Restrict the App installation to `NachikethReddyY/AMR-Fan-App`.
+- [x] Configure the App webhook at the deployed Worker endpoint with SSL verification enabled.
+- [x] Store `WEBHOOK_SECRET`, `OPERATOR_TOKEN`, App ID, installation ID, and private key as Cloudflare Worker secrets.
+- [x] Register and start `black-box-vbook` in WSL2 with the `black-box-linux` label.
+- [x] Verify the App installation token can read the AMR runner inventory and the runner is online and idle.
+
 Live acceptance gates, not yet performed:
 
 - [x] Install/reach Windows WSL2 over the owner's Tailscale access path.
@@ -26,4 +35,4 @@ Live acceptance gates, not yet performed:
 
 External publication is authorized for this thread: create a private GitHub repository, push checkpoint commits to `main`, and deploy the Cloudflare Worker/D1 shell. AMR workflow installation, runner registration, secret configuration, real webhook acceptance, and paid fallback remain owner-controlled gates.
 
-Publication evidence: private repository `https://github.com/NachikethReddyY/black-box-ci`; Worker `https://blackbox-worker-dispatcher.ynrdevs.workers.dev`; D1 migration applied. No GitHub App or webhook secrets were created or stored.
+Publication evidence: private repository `https://github.com/NachikethReddyY/black-box-ci`; Worker `https://blackbox-worker-dispatcher.ynrdevs.workers.dev`; D1 migration applied. Production credentials remain in Cloudflare secrets and local protected files only. No secret value is committed.
