@@ -54,6 +54,7 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 
 - [x] Add an agent-owned SQLite history for structured test reports, cache events, and bounded searchable logs. Job timeline wiring still needs live runner events.
 - [x] Add cache explanations with explicit `reused`, `rebuilt`, `downloaded`, `evicted`, or `unknown` reasons and bounded retention.
+- [x] Add a bounded managed-cache policy with stable builder identities, BuildKit storage limits, package-store inventory, and redacted environment fingerprints. Live BuildKit preparation remains a WSL acceptance gate.
 - [x] Add JUnit ingestion with stable test identities, attempts, durations, and failure signatures.
 - [ ] Add execution manifests and `bb reproduce` only after a clean-workspace boundary is available.
 - [x] Add a read-only runner doctor and retain startup cleanup checks. WSL resource admission and draining mode still need live runner integration.

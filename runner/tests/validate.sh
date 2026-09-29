@@ -119,6 +119,7 @@ if env PATH="$docker_bin:$PATH" DOCKER_LOG="$docker_log" BLACK_BOX_RUNNER_TEST_M
 if command -v shellcheck >/dev/null 2>&1; then if shellcheck "$RUNNER_DIR"/scripts/*.sh "$SCRIPT_DIR/validate.sh"; then pass 'shellcheck passed'; else fail_check 'shellcheck reported issues'; fi; else printf 'unverified: shellcheck unavailable\n'; fi
 if command -v python3 >/dev/null 2>&1; then
   if python3 -m unittest "$SCRIPT_DIR/test_history.py"; then pass 'local history tests passed'; else fail_check 'local history tests failed'; fi
+  if python3 -m unittest "$SCRIPT_DIR/test_cache.py" "$SCRIPT_DIR/test_telemetry.py"; then pass 'cache and telemetry tests passed'; else fail_check 'cache and telemetry tests failed'; fi
 else
   printf '%s\n' 'unverified: python3 unavailable; local history tests not run'
 fi

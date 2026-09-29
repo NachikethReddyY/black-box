@@ -170,7 +170,26 @@ python3 runner/scripts/history.py prune --max-log-rows 50000 --max-test-rows 500
 
 The importer redacts common GitHub tokens and bearer values, truncates each log at 2 MiB, and keeps test attempts separate. Redaction reduces exposure; it is not proof that arbitrary output contains no secret. Do not copy the SQLite database into the repository or attach it to a public issue.
 
-## 9. Diagnose the host before a real run
+## 9. Inspect a managed cache policy
+
+The cache helper gives a trusted repository and Docker image lineage a stable identity. It prepares a named BuildKit `docker-container` builder and records the storage limits that BuildKit should enforce. It does not run Docker, remove cache data, or infer a cache hit from a directory listing unless you explicitly request the operation.
+
+Start from the example and replace `YOUR_USER` with the WSL username:
+
+```bash
+cp config/cache-policy.example.json config/cache-policy.json
+chmod 600 config/cache-policy.json
+python3 scripts/cache.py --config config/cache-policy.json inspect
+python3 scripts/cache.py --config config/cache-policy.json prepare
+python3 scripts/cache.py --config config/cache-policy.json inventory
+python3 scripts/cache.py --config config/cache-policy.json manifest
+```
+
+The `prepare` command is a dry run. `prepare --apply` is the explicit operator action that creates the owned cache directory and invokes `docker buildx create`. It refuses mounted-Windows paths, ambiguous ownership markers, unsupported labels, and disabled policies. The cache helper never runs `docker system prune`; BuildKit's configured garbage collection owns its cache budget.
+
+The policy is intentionally scoped to a trusted repository and image lineage. Do not point it at a public or fork-controlled workflow, and do not commit `cache-policy.json` if it contains a private path or local policy. A cold cache may make a job slower, but deleting cache state must not change whether the job passes.
+
+## 10. Diagnose the host before a real run
 
 Run the read-only doctor after WSL starts and before asking GitHub to queue work:
 
