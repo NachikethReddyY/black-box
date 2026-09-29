@@ -17,5 +17,7 @@ This file records publication checkpoints. It contains no credentials.
 ## Checkpoint 3: publication
 
 - The repository is private and the default branch is `main`.
-- Cloudflare D1 and the Worker are deployed only after local validation.
+- Cloudflare D1 migration `0001_dispatch.sql` applied successfully to `blackbox-dispatcher`.
+- Worker deployed at `https://blackbox-worker-dispatcher.ynrdevs.workers.dev` after local validation.
+- A live method probe returned `405 method_not_allowed`; D1 request count remained zero.
 - Real webhook acceptance remains disabled until owner-controlled Cloudflare secrets and GitHub App installation are supplied.

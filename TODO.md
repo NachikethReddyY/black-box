@@ -25,3 +25,5 @@ Live acceptance gates, not yet performed:
 - [ ] Verify PC-off and restart behavior without spending protected minutes or paid fallback.
 
 External publication is authorized for this thread: create a private GitHub repository, push checkpoint commits to `main`, and deploy the Cloudflare Worker/D1 shell. AMR workflow installation, runner registration, secret configuration, real webhook acceptance, and paid fallback remain owner-controlled gates.
+
+Publication evidence: private repository `https://github.com/NachikethReddyY/black-box-ci`; Worker `https://blackbox-worker-dispatcher.ynrdevs.workers.dev`; D1 migration applied. No GitHub App or webhook secrets were created or stored.

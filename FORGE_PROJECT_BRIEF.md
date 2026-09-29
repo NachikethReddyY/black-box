@@ -1,6 +1,6 @@
 # Black Box: project plan and pipeline
 
-Updated 29 September 2026. This repository contains the v0.1 implementation and planning artifacts. The WSL2 host is prepared but the GitHub runner is not registered. The Worker/D1 deployment is a separate publication checkpoint and does not activate real AMR execution until owner-controlled secrets and workflow installation are complete.
+Updated 29 September 2026. This repository contains the v0.1 implementation and planning artifacts. The WSL2 host is prepared but the GitHub runner is not registered. The Worker/D1 shell is deployed, but it does not activate real AMR execution until owner-controlled secrets and workflow installation are complete.
 
 ## The agreed outcome
 

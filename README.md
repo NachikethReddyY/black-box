@@ -42,9 +42,11 @@ The home path has no GitHub-hosted routing job. Self-hosted execution is free un
 
 ## Current status
 
-The implementation, local Worker/D1 proof, and WSL2 host preparation are complete. The private GitHub repository and Cloudflare Worker/D1 deployment are publication checkpoints. The repository will not contain GitHub App keys, webhook secrets, operator tokens, or runner registration tokens.
+The implementation, local Worker/D1 proof, WSL2 host preparation, private GitHub repository, and Cloudflare Worker/D1 shell deployment are complete. The repository will not contain GitHub App keys, webhook secrets, operator tokens, or runner registration tokens.
 
 The deployed shell still needs owner-controlled secrets and GitHub App installation before it can accept a real AMR webhook. The AMR repository remains unchanged until its workflow template is reviewed and copied deliberately.
+
+Worker URL: `https://blackbox-worker-dispatcher.ynrdevs.workers.dev`
 
 Start with the relevant guide:
 
