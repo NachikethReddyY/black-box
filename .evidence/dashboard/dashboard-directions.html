@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Black Box dashboard directions</title>
+<style>
+:root{--bg:#050607;--panel:#0d1012;--panel2:#121619;--line:#263038;--text:#eef2f4;--muted:#8b969d;--cyan:#55e3f9;--green:#0cee9c;--yellow:#f6c107;--red:#ff5c73;--purple:#b471fa}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{width:min(calc(100% - 44px),1500px);margin:36px auto 80px}h1,h2,h3,p{margin:0}h1{font-size:32px;letter-spacing:-.03em}h2{font-size:17px;letter-spacing:-.01em}h3{font-size:13px;font-weight:600}.intro{display:flex;justify-content:space-between;gap:24px;align-items:end;border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:32px}.intro p{max-width:620px;color:var(--muted);margin-top:8px}.direction{border-top:1px solid var(--line);padding-top:24px;margin-top:36px}.direction>header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px}.direction>header p{color:var(--muted);font-size:13px}.preview{border:1px solid var(--line);background:#080a0b;min-height:520px;display:grid;grid-template-columns:190px minmax(0,1fr);overflow:hidden}.nav{padding:18px 14px;border-right:1px solid var(--line);background:#0a0c0d}.brand{font-weight:700;letter-spacing:-.02em;margin-bottom:28px}.nav small{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.1em;margin:18px 8px 8px}.nav a{display:block;padding:8px;color:#bac4c9;text-decoration:none;border-radius:6px}.nav a.active{background:#18262a;color:var(--cyan)}.main{padding:22px;min-width:0}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:14px;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:18px}.toolbar .meta{color:var(--muted);font-size:12px}.live{color:var(--green);font-size:11px}.grid{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:18px}.section-title{display:flex;justify-content:space-between;margin-bottom:10px}.section-title span{color:var(--muted);font-size:12px}.table{border:1px solid var(--line);background:var(--panel)}.row{display:grid;grid-template-columns:1.5fr .9fr .7fr .8fr;gap:12px;padding:13px 14px;border-bottom:1px solid #1c2429;align-items:center}.row:last-child{border:0}.row.head{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em;background:#101416}.repo{font-weight:600}.sub{font-size:12px;color:var(--muted);margin-top:2px}.status{font-size:12px}.ok{color:var(--green)}.fail{color:var(--red)}.wait{color:var(--yellow)}.muted{color:var(--muted)}.log{border:1px solid var(--line);background:#0a0d0f;min-height:270px}.log-head{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between}.log-body{padding:14px;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;color:#c7d0d4;white-space:pre-wrap}.log-body .err{color:#ff8ea0}.log-body .accent{color:var(--cyan)}.metric-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}.metric{padding:14px;border-bottom:1px solid var(--line);background:var(--panel)}.metric .label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}.metric strong{display:block;font-size:24px;margin-top:8px;letter-spacing:-.03em}.metric small{color:var(--muted)}.bars{display:grid;gap:10px}.barline{display:grid;grid-template-columns:120px 1fr 50px;gap:10px;align-items:center;color:var(--muted);font-size:12px}.bar{height:8px;background:#1b2428;border-radius:4px;overflow:hidden}.fill{height:100%;background:var(--cyan)}.fill.green{background:var(--green)}.fill.yellow{background:var(--yellow)}.timeline{display:grid;grid-template-columns:180px 1fr;gap:0;border:1px solid var(--line);background:var(--panel)}.timeline>div{padding:14px;border-bottom:1px solid #1c2429}.timeline>div:nth-last-child(-n+2){border-bottom:0}.timeline .time{color:var(--muted);font:12px ui-monospace,SFMono-Regular,Menlo,monospace}.run-detail{display:grid;grid-template-columns:270px minmax(0,1fr);gap:18px}.run-side{border-right:1px solid var(--line);padding-right:18px}.run-side p{color:var(--muted);font-size:12px;margin-top:5px}.chipline{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.chip{border:1px solid var(--line);padding:5px 8px;border-radius:5px;color:#c8d1d5;font-size:11px}.chart{height:130px;display:flex;align-items:end;gap:10px;padding:16px 16px 0;border-bottom:1px solid var(--line);background:var(--panel)}.column{flex:1;background:#1d343a;min-height:20px;position:relative}.column span{position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);color:var(--muted);font-size:10px}.column.current{background:var(--cyan)}.legend{display:flex;gap:16px;color:var(--muted);font-size:12px;padding-top:28px}.note{color:var(--muted);font-size:12px;margin-top:10px}@media(max-width:900px){main{width:min(calc(100% - 28px),700px);margin-top:24px}.intro{display:block}.preview{grid-template-columns:1fr}.nav{border-right:0;border-bottom:1px solid var(--line);display:flex;gap:6px;overflow:auto;white-space:nowrap}.nav .brand,.nav small{display:none}.nav a{font-size:12px}.grid,.run-detail{grid-template-columns:1fr}.run-side{border-right:0;border-bottom:1px solid var(--line);padding:0 0 16px}.metric-row{grid-template-columns:repeat(2,1fr)}.row{grid-template-columns:1.5fr .7fr .7fr}.row>:nth-child(4),.row.head>:nth-child(4){display:none}.barline{grid-template-columns:90px 1fr 44px}}
+</style>
+</head>
+<body>
+<main>
+  <div class="intro">
+    <div><h1>Black Box dashboard directions</h1><p>Three information hierarchies for the same private GitHub CI workspace. Sample data is illustrative. Choose the direction that should become the real frontend.</p></div>
+    <div class="muted">AMR-Fan-App · WSL2 home runner</div>
+  </div>
+
+  <section class="direction">
+    <header><h2>Option A · Operations desk</h2><p>Recommended for daily monitoring and fast log triage.</p></header>
+    <div class="preview">
+      <aside class="nav"><div class="brand">Black Box</div><small>Workspace</small><a class="active" href="#">Overview</a><a href="#">Runs</a><a href="#">Repositories</a><small>System</small><a href="#">Runner</a><a href="#">Usage</a><a href="#">Settings</a></aside>
+      <div class="main">
+        <div class="toolbar"><div><h2>Overview</h2><div class="meta">All repositories · last 24 hours</div></div><div class="live">● home online</div></div>
+        <div class="grid">
+          <div><div class="section-title"><h3>Recent runs</h3><span>12 runs</span></div><div class="table"><div class="row head"><div>Repository / workflow</div><div>State</div><div>Duration</div><div>Started</div></div><div class="row"><div><div class="repo">AMR-Fan-App</div><div class="sub">checks.yml · local-postgres</div></div><div class="status ok">Success</div><div>4m 18s</div><div class="muted">2m ago</div></div><div class="row"><div><div class="repo">black-box-ci</div><div class="sub">test · typecheck</div></div><div class="status wait">Running</div><div>1m 04s</div><div class="muted">now</div></div><div class="row"><div><div class="repo">AMR-Fan-App</div><div class="sub">security.yml · dast</div></div><div class="status fail">Failed</div><div>32s</div><div class="muted">18m ago</div></div></div></div>
+          <div><div class="section-title"><h3>Live log</h3><span>local-postgres</span></div><div class="log"><div class="log-head"><span>step: db:verify</span><span class="live">live</span></div><div class="log-body"><span class="muted">10:14:32</span> <span class="accent">runner</span> started job
+<span class="muted">10:14:35</span> docker compose up -d
+<span class="muted">10:14:49</span> postgres is accepting connections
+<span class="muted">10:15:06</span> pnpm db:verify
+<span class="muted">10:15:08</span> <span class="err">ERROR expected schema version 14, found 13</span></div></div></div>
+        </div>
+      </div>
+    </div>
+    <p class="note">The first screen answers: what is running, what failed, and where is the relevant log?</p>
+  </section>
+
+  <section class="direction">
+    <header><h2>Option B · Run detail first</h2><p>Best when the primary job is debugging one failed workflow.</p></header>
+    <div class="preview">
+      <aside class="nav"><div class="brand">Black Box</div><small>Run</small><a class="active" href="#">Run summary</a><a href="#">Jobs</a><a href="#">Logs</a><a href="#">Artifacts</a><small>Context</small><a href="#">Commit</a><a href="#">Checks</a></aside>
+      <div class="main">
+        <div class="toolbar"><div><h2>AMR-Fan-App / checks.yml</h2><div class="meta">Run #184 · main · 8f3c2b1 · started 2m ago</div></div><div class="status fail">Failed</div></div>
+        <div class="run-detail"><div class="run-side"><h3>Jobs</h3><div class="timeline"><div><strong>local-checks</strong><div class="status ok">passed · 1m 22s</div></div><div><strong>local-postgres</strong><div class="status fail">failed · 4m 18s</div></div><div><strong>source-and-dependencies</strong><div class="status ok">passed · 58s</div></div><div><strong>dast-tooling</strong><div class="status ok">passed · 31s</div></div></div><div class="chipline"><span class="chip">home runner</span><span class="chip">WSL2</span><span class="chip">Docker</span></div></div><div><div class="section-title"><h3>Log stream</h3><span>search · filter · download</span></div><div class="log"><div class="log-head"><span>local-postgres / db:verify</span><span class="muted">18.4 MB</span></div><div class="log-body"><span class="muted">10:14:32</span> checkout verified at <span class="accent">8f3c2b1</span>
+<span class="muted">10:14:35</span> Docker network blackbox-amr-184 created
+<span class="muted">10:14:49</span> PostgreSQL ready
+<span class="muted">10:15:08</span> <span class="err">schema mismatch: expected 14, found 13</span>
+<span class="muted">10:15:09</span> <span class="err">job exited with code 1</span></div></div><div class="section-title" style="margin-top:18px"><h3>Timeline</h3><span>wall time 4m 18s</span></div><div class="timeline"><div class="time">10:14:32</div><div>Runner accepted job</div><div class="time">10:14:35</div><div>Docker database started</div><div class="time">10:15:08</div><div class="status fail">Failure surfaced</div></div></div></div>
+      </div>
+    </div>
+    <p class="note">The first screen answers: what happened in this run, and what evidence explains the failure?</p>
+  </section>
+
+  <section class="direction">
+    <header><h2>Option C · System overview</h2><p>Best when hardware use, cost, and capacity are the primary concerns.</p></header>
+    <div class="preview">
+      <aside class="nav"><div class="brand">Black Box</div><small>Observe</small><a class="active" href="#">System</a><a href="#">Capacity</a><a href="#">Usage</a><small>Work</small><a href="#">Runs</a><a href="#">Logs</a><a href="#">Repositories</a></aside>
+      <div class="main">
+        <div class="toolbar"><div><h2>System</h2><div class="meta">VBook · Windows 11 + WSL2 · online</div></div><div class="live">● healthy</div></div>
+        <div class="metric-row"><div class="metric"><div class="label">CPU</div><strong>42%</strong><small>i9 · 16 logical cores</small></div><div class="metric"><div class="label">Memory</div><strong>8.1 / 16 GB</strong><small>WSL2 allocation</small></div><div class="metric"><div class="label">Storage</div><strong>31%</strong><small>750 GB available</small></div><div class="metric"><div class="label">Jobs today</div><strong>18</strong><small>14h 22m runner time</small></div></div>
+        <div class="grid"><div><div class="section-title"><h3>Resource use</h3><span>last 60 minutes</span></div><div class="table" style="padding:16px"><div class="bars"><div class="barline"><span>CPU</span><div class="bar"><div class="fill" style="width:42%"></div></div><span>42%</span></div><div class="barline"><span>Memory</span><div class="bar"><div class="fill green" style="width:51%"></div></div><span>51%</span></div><div class="barline"><span>Docker cache</span><div class="bar"><div class="fill yellow" style="width:67%"></div></div><span>67%</span></div><div class="barline"><span>Network</span><div class="bar"><div class="fill" style="width:28%"></div></div><span>28%</span></div></div></div><div class="section-title" style="margin-top:22px"><h3>Runtime by repository</h3><span>today</span></div><div class="chart"><div class="column" style="height:55%"><span>AMR</span></div><div class="column" style="height:35%"><span>Black Box</span></div><div class="column current" style="height:76%"><span>AMR</span></div><div class="column" style="height:44%"><span>Other</span></div></div><div class="legend"><span>wall time, minutes</span><span class="live">current run</span></div></div><div><div class="section-title"><h3>Runner</h3><span>black-box-vbook</span></div><div class="table"><div class="row"><div><div class="repo">Status</div><div class="sub">GitHub connection</div></div><div class="status ok">Online</div></div><div class="row"><div><div class="repo">Docker</div><div class="sub">engine</div></div><div class="status ok">Ready</div></div><div class="row"><div><div class="repo">Queue</div><div class="sub">waiting jobs</div></div><div>0</div></div></div><div class="section-title" style="margin-top:18px"><h3>Cache</h3><span>NVMe + Docker</span></div><div class="log"><div class="log-body">pnpm store       3.2 GB
+Docker layers    14.7 GB
+Git objects       2.1 GB
+last cleanup     10m ago</div></div></div></div>
+      </div>
+    </div>
+    <p class="note">The first screen answers: is my computer healthy, what is it doing, and where is capacity going?</p>
+  </section>
+</main>
+</body>
+</html>
