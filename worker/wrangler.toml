@@ -18,5 +18,5 @@ crons = ["*/1 * * * *", "23 4 * * 1"]
 [[d1_databases]]
 binding = "DB"
 database_name = "blackbox-dispatcher"
-database_id = "00000000-0000-4000-8000-000000000001"
+database_id = "3bcf9ef0-2797-4988-a6a5-f75ba5c575ba"
 migrations_dir = "migrations"
