@@ -147,6 +147,29 @@ The cleanup script is a dry run unless `--apply` is supplied:
 
 It can remove only direct children of `$HOME/.local/share/black-box-runner/state/transient`. `start.sh` runs cleanup before `run.sh` accepts jobs. With Docker required, startup also removes only containers and volumes bearing `com.blackbox.runner.owner=black-box-ci`. The CI job template must apply that exact Docker label when creating temporary containers and volumes. Unlabeled or differently labeled Docker resources remain untouched. It refuses mounted-Windows paths, symlinks, root-like paths, and any other state directory. It refuses cleanup while the runner is live. It does not remove the runner installation, cache, workspace, logs, PID file, GitHub registration, Docker images, or build cache. It never runs a global Docker prune.
 
+## 8. Keep local CI history and cache evidence
+
+The local history tool stores bounded, redacted evidence outside the repository. It uses SQLite with a searchable log index, so it still works when the Worker or the PC is offline. A cache event records an outcome and a reason. It does not claim a cache hit when the runner did not measure one.
+
+Initialize the store, then ingest reports from a completed job:
+
+```bash
+python3 runner/scripts/history.py init
+python3 runner/scripts/history.py ingest-log --run-id <run-id> --repo <owner/repo> /path/to/job.log
+python3 runner/scripts/history.py ingest-junit --run-id <run-id> --repo <owner/repo> --attempt 1 /path/to/junit.xml
+python3 runner/scripts/history.py cache --run-id <run-id> --kind docker --key <image-lineage> --outcome reused --reason 'unchanged Dockerfile'
+python3 runner/scripts/history.py search 'Connection refused'
+python3 runner/scripts/history.py doctor
+```
+
+Use `reused`, `rebuilt`, `downloaded`, `evicted`, or `unknown` for cache outcomes. The correctness contract is simple: deleting all cache state may make a job slower, but it must not change whether the code passes. Keep detailed logs and traces on the host only as long as the retention policy allows:
+
+```bash
+python3 runner/scripts/history.py prune --max-log-rows 50000 --max-test-rows 50000 --max-cache-rows 50000
+```
+
+The importer redacts common GitHub tokens and bearer values, truncates each log at 2 MiB, and keeps test attempts separate. Redaction reduces exposure; it is not proof that arbitrary output contains no secret. Do not copy the SQLite database into the repository or attach it to a public issue.
+
 ## Validation on a non-Windows host
 
 From this directory:

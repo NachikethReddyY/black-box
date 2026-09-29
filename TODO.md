@@ -52,9 +52,9 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 
 ### CI intelligence backlog
 
-- [ ] Add an agent-owned SQLite history for job timelines, structured test reports, cache events, and bounded searchable logs.
-- [ ] Add cache explanations with explicit `reused`, `rebuilt`, `downloaded`, `evicted`, or `unknown` reasons.
-- [ ] Add JUnit ingestion with stable test identities, attempts, durations, and failure signatures.
+- [x] Add an agent-owned SQLite history for structured test reports, cache events, and bounded searchable logs. Job timeline wiring still needs live runner events.
+- [x] Add cache explanations with explicit `reused`, `rebuilt`, `downloaded`, `evicted`, or `unknown` reasons and bounded retention.
+- [x] Add JUnit ingestion with stable test identities, attempts, durations, and failure signatures.
 - [ ] Add execution manifests and `bb reproduce` only after a clean-workspace boundary is available.
 - [ ] Add `bb doctor`, WSL resource admission, draining mode, and startup cleanup checks.
 - [ ] Add evidence-backed PR summaries and diagnostic actions before AI suggestions.

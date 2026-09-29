@@ -117,5 +117,10 @@ chmod +x "$docker_bin/docker"
 docker_config="$stub/docker-config.env"; sed 's/RUNNER_REQUIRE_DOCKER="false"/RUNNER_REQUIRE_DOCKER="true"/' "$config" >"$docker_config"
 if env PATH="$docker_bin:$PATH" DOCKER_LOG="$docker_log" BLACK_BOX_RUNNER_TEST_MODE=true BLACK_BOX_RUNNER_CONFIG="$docker_config" "$RUNNER_DIR/scripts/cleanup.sh" --startup >/dev/null 2>&1 && grep -q 'ps -aq --filter label=com.blackbox.runner.owner=black-box-ci' "$docker_log" && grep -q 'volume ls -q --filter label=com.blackbox.runner.owner=black-box-ci' "$docker_log" && ! grep -q 'prune' "$docker_log"; then pass 'startup Docker cleanup uses only the CI ownership label'; else fail_check 'startup Docker cleanup was not bounded to the CI label'; fi
 if command -v shellcheck >/dev/null 2>&1; then if shellcheck "$RUNNER_DIR"/scripts/*.sh "$SCRIPT_DIR/validate.sh"; then pass 'shellcheck passed'; else fail_check 'shellcheck reported issues'; fi; else printf 'unverified: shellcheck unavailable\n'; fi
+if command -v python3 >/dev/null 2>&1; then
+  if python3 -m unittest "$SCRIPT_DIR/test_history.py"; then pass 'local history tests passed'; else fail_check 'local history tests failed'; fi
+else
+  printf '%s\n' 'unverified: python3 unavailable; local history tests not run'
+fi
 if (( failures )); then printf 'result: %d validation failure(s)\n' "$failures" >&2; exit 1; fi
 printf 'result: validation passed\n'
