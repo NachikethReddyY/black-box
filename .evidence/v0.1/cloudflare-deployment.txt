@@ -4,9 +4,13 @@ Cloudflare publication, 2026-09-29:
 - migration: 0001_dispatch.sql applied remotely
 - Worker: blackbox-worker-dispatcher
 - URL: https://blackbox-worker-dispatcher.ynrdevs.workers.dev
-- deployed version: c8492cf8-5ab0-46eb-95bf-e4a01f7f387d
+- deployed version: e8d9c65a-0ca0-41e2-9271-7ca2b7a15481
 - schedule triggers: every minute and Monday 04:23 UTC
 - live GET /webhook: 405 method_not_allowed
-- live unsigned POST /webhook: 401 invalid_signature
+- live signed workflow_run boundary: 202 reconciliation_scheduled
+- live invalid signature boundary: 401 invalid_signature
+- operator token unknown request: 404 not_found
 - remote D1 request count after probes: 0
-- secrets: not configured; no GitHub App, webhook, operator, or runner credentials were created or stored
+- secrets: five production secrets configured in Wrangler, names only: WEBHOOK_SECRET, OPERATOR_TOKEN, GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, GITHUB_APP_INSTALLATION_ID
+- GitHub App installation: 166104797, restricted to NachikethReddyY/AMR-Fan-App
+- home runner: black-box-vbook, online and idle, labels self-hosted/Linux/X64/black-box-linux

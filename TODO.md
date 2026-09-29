@@ -33,6 +33,6 @@ Live acceptance gates, not yet performed:
 - [ ] Verify webhook, PR revision association, duplicate and failed-delivery recovery in GitHub.
 - [ ] Verify PC-off and restart behavior without spending protected minutes or paid fallback.
 
-External publication is authorized for this thread: create a private GitHub repository, push checkpoint commits to `main`, and deploy the Cloudflare Worker/D1 shell. AMR workflow installation, runner registration, secret configuration, real webhook acceptance, and paid fallback remain owner-controlled gates.
+External publication is authorized for this thread: create a private GitHub repository, push checkpoint commits to `main`, and deploy the Cloudflare Worker/D1 shell. The deliberate AMR workflow test, fallback enablement, and PC-off recovery test remain owner-controlled gates.
 
 Publication evidence: private repository `https://github.com/NachikethReddyY/black-box-ci`; Worker `https://blackbox-worker-dispatcher.ynrdevs.workers.dev`; D1 migration applied. Production credentials remain in Cloudflare secrets and local protected files only. No secret value is committed.
