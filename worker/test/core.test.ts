@@ -5,7 +5,7 @@ import { createPrivateKey, webcrypto } from "node:crypto";
 import { configFromEnv, selectRunner } from "../src/config";
 import { createAppJwt } from "../src/auth";
 import { verifyGitHubSignature, githubSignatureForTests } from "../src/signature";
-import { workflowDispatchInput } from "../src/github";
+import { runnerHasRequiredLabels, workflowDispatchInput } from "../src/github";
 import type { RequestRecord, WorkerEnv } from "../src/types";
 
 Object.defineProperty(globalThis, "crypto", { value: webcrypto, configurable: true });
@@ -43,6 +43,11 @@ test("workflow input preserves exact revision and correlation fields", () => {
     runner: "home", commit_sha: "a".repeat(40), head_sha: "a".repeat(40), request_id: request.requestId,
     source_ref: "refs/heads/feature", pr_number: "7", source_event: "pull_request",
   });
+});
+
+test("runner label matching accepts GitHub's canonical label casing", () => {
+  assert.equal(runnerHasRequiredLabels(["self-hosted", "Linux", "X64", "black-box-linux"], "black-box-linux"), true);
+  assert.equal(runnerHasRequiredLabels(["self-hosted", "Linux", "X64"], "black-box-linux"), false);
 });
 
 test("App JWT uses RS256 and expected claims", async () => {

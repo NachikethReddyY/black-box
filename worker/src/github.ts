@@ -2,6 +2,10 @@ import { createInstallationToken } from './auth';
 import type { DispatcherConfig, GitHubApi, RequestRecord, Runner, WorkerEnv, WorkflowDispatchInput, WorkflowRun, JobResult } from './types';
 export function object(value: unknown): Record<string, unknown> | null { return typeof value === 'object' && value !== null ? value as Record<string, unknown> : null; }
 export function exactSha(value: unknown): string | null { return typeof value === 'string' && /^[0-9a-f]{40}$/i.test(value) ? value.toLowerCase() : null; }
+export function runnerHasRequiredLabels(labels: readonly unknown[], homeRunnerLabel: string): boolean {
+  const normalized = new Set(labels.filter((label): label is string => typeof label === 'string').map(label => label.toLowerCase()));
+  return ['self-hosted', 'linux', 'x64', homeRunnerLabel.toLowerCase()].every(label => normalized.has(label));
+}
 export function workflowDispatchInput(_config: DispatcherConfig, r: RequestRecord): WorkflowDispatchInput {
   if (r.runner === 'waiting' || !r.mergeReady) throw new Error('request_not_dispatchable');
   return { ref: r.workflowRef, inputs: { runner: r.runner, commit_sha: r.commitSha, head_sha: r.headSha, request_id: r.requestId, source_ref: r.sourceRef, pr_number: r.prNumber, source_event: r.sourceEvent } };
@@ -88,7 +92,7 @@ export function createGitHubApi(env: WorkerEnv, config: DispatcherConfig, fetche
         const r = object(raw);
         if (!r || !Array.isArray(r.labels)) throw new Error('invalid_runner_inventory');
         const labels = r.labels.map(x => object(x)?.name);
-        if (!['self-hosted','linux','x64',config.homeRunnerLabel].every(x => labels.includes(x)) || r.status !== 'online') continue;
+        if (!runnerHasRequiredLabels(labels, config.homeRunnerLabel) || r.status !== 'online') continue;
         online = true; if (r.busy === false) available.add('home');
       }
       if (!online && config.paidFallbacksEnabled) {

@@ -39,6 +39,8 @@ Required local secrets and vars:
 - `GITHUB_WORKFLOW_FILE`, `GITHUB_WORKFLOW_REF`: workflow file and dispatch ref.
 - `HOME_RUNNER_LABEL`: optional self-hosted runner label, default `black-box-linux`. Availability comes from GitHub's repository self-hosted runner API and requires an online, idle runner with `self-hosted`, `linux`, `x64`, and `black-box-linux` labels. An offline or busy HOME runner fails closed to `waiting`; paid fallbacks are only considered when explicitly enabled.
 
+GitHub returns the built-in `Linux` and `X64` labels with capital letters. The dispatcher compares labels case-insensitively, so the configured label can remain lowercase.
+
 The workflow must declare these `workflow_dispatch` inputs: `runner` (`home|github|blacksmith`, a provider key), `commit_sha`, `head_sha`, `request_id`, `source_ref`, and optional `pr_number`. Requests that remain on `waiting` stay pending and do not dispatch a `waiting` runner input. PR requests use the fresh GitHub `merge_commit_sha` as `commit_sha`; if GitHub has not produced one yet, Cron refreshes the PR and waits. Include `request_id` in the workflow run name so ambiguous dispatch reconciliation can find it.
 
 Manual retry is deliberately guarded. An operator must inspect the GitHub run list and confirm that no matching run exists:
