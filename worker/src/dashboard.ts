@@ -53,6 +53,21 @@ export interface DashboardPayload {
   readonly jobs: readonly DashboardJob[];
   readonly fetchedAt: string;
   readonly host: HostTelemetry | null;
+  readonly warnings: readonly DashboardWarning[];
+}
+
+export type DashboardWarningCode =
+  | "installation_visibility_limited"
+  | "repositories_unavailable"
+  | "repository_runs_unavailable"
+  | "repository_jobs_unavailable"
+  | "host_telemetry_restricted"
+  | "host_telemetry_unavailable";
+
+export interface DashboardWarning {
+  readonly code: DashboardWarningCode;
+  readonly message: string;
+  readonly repository?: string;
 }
 
 export interface DashboardLogLine {
@@ -80,6 +95,7 @@ function bytesToBase64Url(bytes: Uint8Array): string {
 }
 
 function base64UrlToBytes(value: string): Uint8Array {
+  if (!/^[A-Za-z0-9_-]*$/.test(value) || value.length % 4 === 1) throw new Error("invalid_base64url");
   const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4);
   const binary = atob(padded);
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
@@ -104,11 +120,17 @@ async function encryptToken(token: string, secret: string): Promise<string> {
 }
 
 async function decryptToken(ciphertext: string, secret: string): Promise<string | null> {
-  const [ivText, bodyText] = ciphertext.split(".");
-  if (!ivText || !bodyText) return null;
   try {
+    if (typeof ciphertext !== "string") return null;
+    const parts = ciphertext.split(".");
+    if (parts.length !== 2) return null;
+    const [ivText, bodyText] = parts;
+    if (!ivText || !bodyText) return null;
+    const iv = base64UrlToBytes(ivText);
+    if (iv.byteLength !== 12) return null;
     const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: base64UrlToBytes(ivText) }, await encryptionKey(secret), base64UrlToBytes(bodyText));
-    return new TextDecoder().decode(decrypted);
+    const token = new TextDecoder().decode(decrypted);
+    return /^\S{1,2048}$/.test(token) ? token : null;
   } catch {
     return null;
   }
@@ -118,19 +140,35 @@ function cookieValue(request: Request, name: string): string | null {
   const cookieHeader = request.headers.get("Cookie") ?? "";
   for (const part of cookieHeader.split(";")) {
     const [key, ...value] = part.trim().split("=");
-    if (key === name) return decodeURIComponent(value.join("="));
+    if (key !== name) continue;
+    try {
+      return decodeURIComponent(value.join("="));
+    } catch {
+      return null;
+    }
   }
   return null;
 }
 
-function cookie(name: string, value: string, maxAge: number): string {
-  return `${name}=${encodeURIComponent(value)}; Max-Age=${maxAge}; Path=/; HttpOnly; Secure; SameSite=None`;
+function cookie(name: string, value: string, maxAge: number, sameSite: "Lax" | "None" = "Lax"): string {
+  return `${name}=${encodeURIComponent(value)}; Max-Age=${maxAge}; Path=/; HttpOnly; Secure; SameSite=${sameSite}`;
+}
+
+function dashboardOrigin(env: WorkerEnv): string | null {
+  if (!env.DASHBOARD_ORIGIN) return null;
+  try {
+    const origin = new URL(env.DASHBOARD_ORIGIN);
+    if (origin.protocol !== "http:" && origin.protocol !== "https:") return null;
+    return origin.origin;
+  } catch {
+    return null;
+  }
 }
 
 function corsHeaders(request: Request, env: WorkerEnv): Headers {
   const headers = new Headers();
   const origin = request.headers.get("Origin");
-  if (origin && env.DASHBOARD_ORIGIN && origin === env.DASHBOARD_ORIGIN.replace(/\/$/, "")) {
+  if (origin && origin === dashboardOrigin(env)) {
     headers.set("Access-Control-Allow-Origin", origin);
     headers.set("Access-Control-Allow-Credentials", "true");
     headers.set("Access-Control-Allow-Headers", "Content-Type");
@@ -147,11 +185,16 @@ export function dashboardJson(request: Request, env: WorkerEnv, body: unknown, s
 }
 
 function redirectTarget(request: Request, env: WorkerEnv): string {
-  return (env.DASHBOARD_ORIGIN ?? new URL(request.url).origin).replace(/\/$/, "");
+  return dashboardOrigin(env) ?? new URL(request.url).origin;
+}
+
+function sessionSameSite(request: Request, env: WorkerEnv): "Lax" | "None" {
+  const configuredOrigin = dashboardOrigin(env);
+  return configuredOrigin && configuredOrigin !== new URL(request.url).origin ? "None" : "Lax";
 }
 
 function configured(env: WorkerEnv): env is WorkerEnv & Required<Pick<WorkerEnv, "GITHUB_OAUTH_CLIENT_ID" | "GITHUB_OAUTH_CLIENT_SECRET" | "DASHBOARD_SESSION_SECRET">> {
-  return Boolean(env.GITHUB_OAUTH_CLIENT_ID && env.GITHUB_OAUTH_CLIENT_SECRET && env.DASHBOARD_SESSION_SECRET);
+  return Boolean(env.GITHUB_OAUTH_CLIENT_ID?.trim() && env.GITHUB_OAUTH_CLIENT_SECRET?.trim() && env.DASHBOARD_SESSION_SECRET?.trim());
 }
 
 function validRepository(value: string | null): value is string {
@@ -160,6 +203,10 @@ function validRepository(value: string | null): value is string {
 
 function validId(value: string | null): value is string {
   return value !== null && /^\d{1,20}$/.test(value);
+}
+
+function validCookieToken(value: string | null): value is string {
+  return value !== null && /^[A-Za-z0-9_-]{1,256}$/.test(value);
 }
 
 function iso(value: unknown): string | null {
@@ -215,50 +262,123 @@ async function githubJson(token: string, suffix: string, init: RequestInit = {})
     ...init,
     headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`, "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "Black-Box-Dashboard", ...init.headers },
   });
-  if (!response.ok) throw new Error(`github_http_${response.status}`);
+  if (!response.ok) throw new GitHubRequestError(response.status);
   return response.json();
+}
+
+class GitHubRequestError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`github_http_${status}`);
+    this.name = "GitHubRequestError";
+    this.status = status;
+  }
+}
+
+function dashboardUser(value: unknown): DashboardUser | null {
+  const row = object(value);
+  if (!row || typeof row.login !== "string" || !/^[A-Za-z0-9_.-]{1,39}$/.test(row.login)) return null;
+  const name = row.name;
+  if (name !== undefined && name !== null && typeof name !== "string") return null;
+  const avatarUrl = "avatar_url" in row ? row.avatar_url : row.avatarUrl;
+  if (avatarUrl !== undefined && avatarUrl !== null && typeof avatarUrl !== "string") return null;
+  return {
+    login: row.login,
+    name: name ?? null,
+    avatarUrl: avatarUrl ?? null,
+  };
+}
+
+function warningFor(
+  code: Exclude<DashboardWarningCode, "installation_visibility_limited" | "host_telemetry_restricted">,
+  message: string,
+  error: unknown,
+  repository?: string,
+): DashboardWarning {
+  const detail = error instanceof GitHubRequestError ? ` (GitHub returned HTTP ${error.status}.)` : "";
+  return { code, message: `${message}${detail}`, ...(repository ? { repository } : {}) };
+}
+
+function trustedActor(login: string, env: WorkerEnv): boolean {
+  const configured = typeof env.TRUSTED_ACTORS === "string" ? env.TRUSTED_ACTORS : "";
+  return configured.split(",").some((actor) => actor.trim().toLowerCase() === login.toLowerCase());
 }
 
 async function sessionRow(request: Request, env: WorkerEnv): Promise<{ id: string; token: string; user: DashboardUser } | null> {
   if (!env.DASHBOARD_SESSION_SECRET) return null;
   const id = cookieValue(request, SESSION_COOKIE);
-  if (!id) return null;
-  const row = await env.DB.prepare("SELECT * FROM dashboard_sessions WHERE session_id=? AND expires_at>? LIMIT 1").bind(id, Date.now()).first<SessionRow>();
-  if (!row) return null;
-  const token = await decryptToken(row.token_ciphertext, env.DASHBOARD_SESSION_SECRET);
-  if (!token) return null;
+  if (!validCookieToken(id)) return null;
   try {
-    const user = JSON.parse(row.user_json) as DashboardUser;
-    if (typeof user.login !== "string") return null;
-    return { id, token, user };
+    const row = await env.DB.prepare("SELECT * FROM dashboard_sessions WHERE session_id=? AND expires_at>? LIMIT 1").bind(id, Date.now()).first<SessionRow>();
+    if (!row || typeof row.token_ciphertext !== "string" || typeof row.user_json !== "string") return null;
+    const token = await decryptToken(row.token_ciphertext, env.DASHBOARD_SESSION_SECRET);
+    if (!token) return null;
+    const user = dashboardUser(JSON.parse(row.user_json));
+    return user ? { id, token, user } : null;
   } catch {
     return null;
   }
 }
 
 async function dashboardData(token: string, user: DashboardUser, env: WorkerEnv): Promise<DashboardPayload> {
-  const repoPayload = await githubJson(token, "/user/repos?per_page=50&sort=updated&affiliation=owner,collaborator,organization_member");
+  const warnings: DashboardWarning[] = [{
+    code: "installation_visibility_limited",
+    message: "GitHub App access is limited to repositories available to this app installation and the signed-in user.",
+  }];
+  let repoPayload: unknown = [];
+  try {
+    repoPayload = await githubJson(token, "/user/repos?per_page=50&sort=updated&affiliation=owner,collaborator,organization_member");
+  } catch (error) {
+    warnings.push(warningFor("repositories_unavailable", "Repository access is temporarily unavailable.", error));
+  }
   const repositories = Array.isArray(repoPayload) ? repoPayload.map(normalizeRepository).filter((repo): repo is DashboardRepository => repo !== null) : [];
   const visibleRepos = repositories.slice(0, 16);
   const runGroups = await Promise.all(visibleRepos.map(async (repo) => {
-    const payload = object(await githubJson(token, `/repos/${repo.fullName.split("/").map(encodeURIComponent).join("/")}/actions/runs?per_page=25`));
-    if (!Array.isArray(payload?.workflow_runs)) return [];
-    return payload.workflow_runs.map((run) => normalizeGitHubRun(run, repo.fullName)).filter((run): run is DashboardRun => run !== null);
+    try {
+      const payload = object(await githubJson(token, `/repos/${repo.fullName.split("/").map(encodeURIComponent).join("/")}/actions/runs?per_page=25`));
+      if (!Array.isArray(payload?.workflow_runs)) return { runs: [] as DashboardRun[], warning: null };
+      return { runs: payload.workflow_runs.map((run) => normalizeGitHubRun(run, repo.fullName)).filter((run): run is DashboardRun => run !== null), warning: null };
+    } catch (error) {
+      return { runs: [] as DashboardRun[], warning: warningFor("repository_runs_unavailable", "Workflow runs are unavailable for this repository.", error, repo.fullName) };
+    }
   }));
-  const runs = runGroups.flat().sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 100);
+  for (const group of runGroups) if (group.warning) warnings.push(group.warning);
+  const runs = runGroups.flatMap((group) => group.runs).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 100);
   const jobs = (await Promise.all(runs.slice(0, 8).map(async (run) => {
-    const suffix = `/repos/${run.repo.split("/").map(encodeURIComponent).join("/")}/actions/runs/${run.id}/jobs?per_page=100`;
-    const payload = object(await githubJson(token, suffix));
-    if (!Array.isArray(payload?.jobs)) return [];
-    return payload.jobs.map((job) => normalizeJob(job, run.repo, run.id)).filter((job): job is DashboardJob => job !== null);
-  }))).flat();
-  return { user, repositories, runs, jobs, host: await latestHostTelemetry(env.DB), fetchedAt: new Date().toISOString() };
+    try {
+      const suffix = `/repos/${run.repo.split("/").map(encodeURIComponent).join("/")}/actions/runs/${run.id}/jobs?per_page=100`;
+      const payload = object(await githubJson(token, suffix));
+      if (!Array.isArray(payload?.jobs)) return { jobs: [] as DashboardJob[], warning: null };
+      return { jobs: payload.jobs.map((job) => normalizeJob(job, run.repo, run.id)).filter((job): job is DashboardJob => job !== null), warning: null };
+    } catch (error) {
+      return { jobs: [] as DashboardJob[], warning: warningFor("repository_jobs_unavailable", "Workflow jobs are unavailable for this repository.", error, run.repo) };
+    }
+  })));
+  for (const group of jobs) if (group.warning) warnings.push(group.warning);
+  const jobRows = jobs.flatMap((group) => group.jobs);
+  let host: HostTelemetry | null = null;
+  if (trustedActor(user.login, env)) {
+    try {
+      host = await latestHostTelemetry(env.DB);
+    } catch {
+      warnings.push({ code: "host_telemetry_unavailable", message: "Host telemetry is temporarily unavailable." });
+    }
+  } else {
+    warnings.push({ code: "host_telemetry_restricted", message: "Host telemetry is available only to configured trusted actors." });
+  }
+  return { user, repositories, runs, jobs: jobRows, host, warnings, fetchedAt: new Date().toISOString() };
 }
 
 async function readLog(request: Request, token: string): Promise<Response> {
   const url = new URL(request.url), repo = url.searchParams.get("repo"), jobId = url.searchParams.get("job_id");
   if (!validRepository(repo) || !validId(jobId)) return new Response(JSON.stringify({ error: "invalid_log_target" }), { status: 400, headers: { "Content-Type": "application/json" } });
-  const response = await fetch(`https://api.github.com/repos/${repo.split("/").map(encodeURIComponent).join("/")}/actions/jobs/${jobId}/logs`, { headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`, "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "Black-Box-Dashboard" } });
+  let response: Response;
+  try {
+    response = await fetch(`https://api.github.com/repos/${repo.split("/").map(encodeURIComponent).join("/")}/actions/jobs/${jobId}/logs`, { headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`, "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "Black-Box-Dashboard" } });
+  } catch {
+    return new Response(JSON.stringify({ error: "github_unavailable" }), { status: 502, headers: { "Content-Type": "application/json" } });
+  }
   if (!response.ok) return new Response(JSON.stringify({ error: `github_http_${response.status}` }), { status: response.status, headers: { "Content-Type": "application/json" } });
   const reader = response.body?.getReader();
   if (!reader) return new Response("", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
@@ -281,7 +401,6 @@ async function oauthStart(request: Request, env: WorkerEnv): Promise<Response> {
   const target = new URL("https://github.com/login/oauth/authorize");
   target.searchParams.set("client_id", env.GITHUB_OAUTH_CLIENT_ID);
   target.searchParams.set("redirect_uri", callback);
-  target.searchParams.set("scope", "read:user repo workflow");
   target.searchParams.set("state", state);
   return new Response(null, { status: 302, headers: { Location: target.toString(), "Set-Cookie": cookie(STATE_COOKIE, state, 600) } });
 }
@@ -289,22 +408,50 @@ async function oauthStart(request: Request, env: WorkerEnv): Promise<Response> {
 async function oauthCallback(request: Request, env: WorkerEnv): Promise<Response> {
   if (!configured(env)) return dashboardJson(request, env, { error: "dashboard_auth_not_configured" }, 503);
   const url = new URL(request.url), code = url.searchParams.get("code"), state = url.searchParams.get("state");
-  if (!code || !state || state !== cookieValue(request, STATE_COOKIE)) return dashboardJson(request, env, { error: "oauth_state_mismatch" }, 400);
+  if (!code || !/^[A-Za-z0-9_-]{16,256}$/.test(state ?? "") || state !== cookieValue(request, STATE_COOKIE)) return dashboardJson(request, env, { error: "oauth_state_mismatch" }, 400);
   const callback = new URL("/auth/github/callback", request.url).toString();
-  const tokenResponse = await fetch("https://github.com/login/oauth/access_token", { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify({ client_id: env.GITHUB_OAUTH_CLIENT_ID, client_secret: env.GITHUB_OAUTH_CLIENT_SECRET, code, redirect_uri: callback }) });
-  const tokenPayload = object(await tokenResponse.json());
+  let tokenResponse: Response;
+  let tokenPayload: Record<string, unknown> | null;
+  try {
+    tokenResponse = await fetch("https://github.com/login/oauth/access_token", { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify({ client_id: env.GITHUB_OAUTH_CLIENT_ID, client_secret: env.GITHUB_OAUTH_CLIENT_SECRET, code, redirect_uri: callback }) });
+    tokenPayload = object(await tokenResponse.json());
+  } catch {
+    return dashboardJson(request, env, { error: "oauth_token_exchange_failed" }, 502);
+  }
   if (!tokenResponse.ok || typeof tokenPayload?.access_token !== "string") return dashboardJson(request, env, { error: "oauth_token_exchange_failed" }, 502);
-  const profile = object(await githubJson(tokenPayload.access_token, "/user"));
-  if (typeof profile?.login !== "string") return dashboardJson(request, env, { error: "github_profile_failed" }, 502);
-  const user: DashboardUser = { login: profile.login, name: typeof profile.name === "string" ? profile.name : null, avatarUrl: typeof profile.avatar_url === "string" ? profile.avatar_url : null };
+  let user: DashboardUser | null;
+  try {
+    user = dashboardUser(await githubJson(tokenPayload.access_token, "/user"));
+  } catch {
+    user = null;
+  }
+  if (!user) return dashboardJson(request, env, { error: "github_profile_failed" }, 502);
   const sessionId = randomToken();
   const encrypted = await encryptToken(tokenPayload.access_token, env.DASHBOARD_SESSION_SECRET);
   const now = Date.now();
-  await env.DB.prepare("INSERT INTO dashboard_sessions (session_id,token_ciphertext,user_json,created_at,expires_at) VALUES (?,?,?,?,?)").bind(sessionId, encrypted, JSON.stringify(user), now, now + SESSION_TTL_MS).run();
+  try {
+    await env.DB.prepare("INSERT INTO dashboard_sessions (session_id,token_ciphertext,user_json,created_at,expires_at) VALUES (?,?,?,?,?)").bind(sessionId, encrypted, JSON.stringify(user), now, now + SESSION_TTL_MS).run();
+  } catch {
+    return dashboardJson(request, env, { error: "dashboard_session_unavailable" }, 503);
+  }
   const headers = new Headers({ Location: `${redirectTarget(request, env)}/` });
-  headers.append("Set-Cookie", cookie(SESSION_COOKIE, sessionId, SESSION_TTL_MS / 1000));
+  headers.append("Set-Cookie", cookie(SESSION_COOKIE, sessionId, SESSION_TTL_MS / 1000, sessionSameSite(request, env)));
   headers.append("Set-Cookie", cookie(STATE_COOKIE, "", 0));
   return new Response(null, { status: 302, headers });
+}
+
+function sameOriginRequest(request: Request, env: WorkerEnv): boolean {
+  const sources = [request.headers.get("Origin"), request.headers.get("Referer")].filter((source): source is string => Boolean(source));
+  if (sources.length === 0) return false;
+  const allowed = new Set([new URL(request.url).origin, dashboardOrigin(env)]);
+  for (const source of sources) {
+    try {
+      if (!allowed.has(new URL(source).origin)) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }
 
 export async function handleDashboardRequest(request: Request, env: WorkerEnv): Promise<Response | null> {
@@ -314,9 +461,12 @@ export async function handleDashboardRequest(request: Request, env: WorkerEnv): 
   if (path === "/auth/github" && request.method === "GET") return oauthStart(request, env);
   if (path === "/auth/github/callback" && request.method === "GET") return oauthCallback(request, env);
   if (path === "/auth/logout" && request.method === "POST") {
+    if (!sameOriginRequest(request, env)) return dashboardJson(request, env, { error: "same_origin_required" }, 403);
     const id = cookieValue(request, SESSION_COOKIE);
-    if (id) await env.DB.prepare("DELETE FROM dashboard_sessions WHERE session_id=?").bind(id).run();
-    return new Response(null, { status: 204, headers: { "Set-Cookie": cookie(SESSION_COOKIE, "", 0) } });
+    if (validCookieToken(id)) {
+      try { await env.DB.prepare("DELETE FROM dashboard_sessions WHERE session_id=?").bind(id).run(); } catch { /* clearing the cookie still logs the browser out */ }
+    }
+    return new Response(null, { status: 204, headers: { "Set-Cookie": cookie(SESSION_COOKIE, "", 0, sessionSameSite(request, env)) } });
   }
   const session = await sessionRow(request, env);
   if (!session) return dashboardJson(request, env, { error: "authentication_required", login_url: "/auth/github" }, 401);

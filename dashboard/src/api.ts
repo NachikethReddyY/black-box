@@ -64,7 +64,14 @@ export type DashboardPayload = {
   runs: DashboardRun[];
   jobs: DashboardJob[];
   host: HostTelemetry | null;
+  warnings?: DashboardWarning[];
   fetchedAt: string;
+};
+
+export type DashboardWarning = {
+  code: string;
+  message: string;
+  repository?: string;
 };
 
 export type DashboardLogLine = {
