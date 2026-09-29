@@ -1,6 +1,6 @@
 # Black Box reviewer build report
 
-Date: 2026-09-30  
+Date: 2026-09-30
 Branch: `t3code/reviewer-project-scope`
 
 ## Outcome
