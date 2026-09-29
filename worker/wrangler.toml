@@ -1,0 +1,22 @@
+name = "blackbox-worker-dispatcher"
+main = "src/index.ts"
+compatibility_date = "2026-09-29"
+
+[vars]
+# Safe local defaults. Set secrets with `wrangler secret put` only when needed.
+DISPATCH_RUNNERS = "home,waiting"
+GITHUB_WORKFLOW_FILE = "black-box-ci.yml"
+GITHUB_WORKFLOW_REF = "main"
+HOME_RUNNER_LABEL = "black-box-linux"
+TRUSTED_REPOSITORIES = "NachikethReddyY/AMR-Fan-App"
+TRUSTED_ACTORS = "NachikethReddyY"
+ENABLE_PAID_FALLBACKS = "false"
+
+[triggers]
+crons = ["*/1 * * * *", "23 4 * * 1"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "blackbox-dispatcher"
+database_id = "00000000-0000-4000-8000-000000000001"
+migrations_dir = "migrations"

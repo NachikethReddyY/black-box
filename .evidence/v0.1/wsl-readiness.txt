@@ -1,0 +1,10 @@
+whoami=vbook
+kernel=6.18.33.2-microsoft-standard-WSL2
+docker=29.1.3
+compose=2.40.3+ds1-0ubuntu1
+node=v24.20.0
+pnpm=12.6.0
+runner=2.337.0
+runner_dir=present
+docker_group=present
+data_marker=black-box-runner-v0.1

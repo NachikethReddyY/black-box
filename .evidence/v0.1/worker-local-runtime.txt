@@ -1,0 +1,5 @@
+Local Wrangler/D1 proof, 2026-09-29 UTC:
+- `wrangler d1 migrations apply blackbox-dispatcher --local --persist-to .wrangler-test` applied 0001_dispatch.sql successfully.
+- A signed synthetic pull_request webhook to local Worker returned HTTP 202.
+- The stored request row was state=pending, source_event=pull_request, merge_ready=0, runner=waiting.
+- No GitHub credentials or real repository payloads were used. The runtime was stopped after the probe.

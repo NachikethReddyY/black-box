@@ -1,0 +1,152 @@
+# BlackBox runner v0.1: Windows 11 + WSL2
+
+This directory is a setup skeleton for a Linux GitHub Actions self-hosted runner inside Ubuntu on WSL2. It does not install packages, download the runner, register a runner, create a Windows service, or configure Docker for you.
+
+GitHub's documentation lists Ubuntu 20.04+ as a supported Linux runner OS and requires Docker on Linux when workflows use Docker container actions or service containers. Read the current official instructions before registration:
+
+- [Adding self-hosted runners](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners)
+- [Self-hosted runner reference](https://docs.github.com/en/actions/reference/runners/self-hosted-runners)
+- [Using labels with self-hosted runners](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/apply-labels)
+
+## 1. Prepare Windows and Ubuntu in WSL2
+
+1. Enable WSL2 and install an Ubuntu distribution using Microsoft's current Windows instructions.
+2. Open the Ubuntu terminal. Run the commands below there, not in PowerShell.
+3. Keep runner files, caches, and job work under the Linux filesystem. The default paths are:
+   - runner install: `$HOME/actions-runner`
+   - state and logs: `$HOME/.local/share/black-box-runner/state`
+   - cache: `$HOME/.local/share/black-box-runner/cache`
+   - job workspace: `$HOME/.local/share/black-box-runner/work`
+4. Do not change these paths to `/mnt/c/...` or another mounted Windows path for this v0.1 skeleton.
+
+From this directory, copy the example configuration and explicitly create the dedicated paths:
+
+```bash
+cp config/runner.env.example runner.env
+./scripts/setup-paths.sh
+```
+
+Edit `runner.env` only for local, non-secret values. Do not put a GitHub token in it.
+
+## 2. Check prerequisites without changing the machine
+
+```bash
+./scripts/prereq.sh
+./scripts/status.sh
+```
+
+`prereq.sh` is read-only. It reports whether this host looks like WSL2, whether Bash, curl, Git, and Docker are available, whether the Docker daemon responds, and whether the runner executable is present. A non-WSL host may report a failed WSL2 check even when the scripts themselves are valid.
+
+Install or configure Ubuntu, Docker Desktop's WSL integration, and other prerequisites using your organization's approved process. This repository does not automate those changes.
+
+If you own this checkout's pinned tool installer, run it explicitly inside WSL after prerequisites are ready:
+
+```bash
+./scripts/install-tools.sh
+export PATH="$HOME/.local/bin:$PATH"
+node --version
+pnpm --version
+"$HOME/actions-runner/bin/Runner.Listener" --version
+```
+
+The current pinned values are Node 24.20.0, pnpm 12.6.0, and Actions runner 2.337.0. The installer does not register or start a runner. It is owned by the parent setup task; this runner lifecycle skeleton only consumes the resulting files.
+
+Operator-reported WSL validation for `/home/vbook/BlackBox` recorded these versions: Ubuntu 26.04, Docker 29.1.3, Compose 2.40.3, Node 24.20.0, pnpm 12.6.0, and runner 2.337.0. This records installed tool versions only; it does not claim GitHub registration, online/idle state, or a deployed job.
+
+## 3. Install the runner using GitHub's current commands
+
+Open the target repository on GitHub, then go to **Settings → Actions → Runners → New self-hosted runner → Linux → x64** (choose the architecture shown for your machine). GitHub displays versioned download and extraction commands for the current runner release.
+
+Paste and run those official download/extraction commands in Ubuntu, with the extraction directory set to `$HOME/actions-runner`. Do not copy a registration token into this repository or into shell history you intend to share.
+
+## 4. Register the runner and paste the label
+
+On the same GitHub page, copy the **registration/configuration commands GitHub generates for your repository**. Paste them into Ubuntu only at the point marked by GitHub. The token is short-lived and must come from GitHub; this guide intentionally does not contain one.
+
+The generated Linux command should configure the runner with the custom label and the dedicated job workspace required by this skeleton:
+
+```text
+./config.sh --url <PASTE_REPOSITORY_URL_FROM_GITHUB> --token <PASTE_SHORT_LIVED_TOKEN_FROM_GITHUB> --labels black-box-linux --work /home/YOUR_USER/.local/share/black-box-runner/work
+```
+
+Replace `YOUR_USER` with the Ubuntu username and use the exact URL, token, and any current flags shown by GitHub. If GitHub asks for a runner name, use a local name such as `black-box-wsl2`.
+
+When registration finishes, verify that `$HOME/actions-runner/run.sh` exists. Then run:
+
+```bash
+./scripts/status.sh
+./scripts/prereq.sh
+```
+
+The expected workflow routing value requires all four labels, including the default x64 label:
+
+```yaml
+runs-on: [self-hosted, linux, x64, black-box-linux]
+```
+
+A runner must be online and carry every requested label to receive a job. Confirm the label and online state in GitHub before using this `runs-on` value.
+
+## 5. Start, stop, and inspect
+
+These commands act only when you invoke them explicitly:
+
+```bash
+./scripts/start.sh
+./scripts/status.sh
+./scripts/stop.sh
+```
+
+`start.sh` launches the already-configured `run.sh` process and records its PID and log under `$HOME/.local/share/black-box-runner/state`. It does not register a runner or install a service. `stop.sh` sends SIGTERM to the PID recorded by `start.sh`, prints `stopping`, and waits for process exit. It prints `runner stopped` only after the process exits; otherwise it reports `runner still running` and returns failure. The upstream `run.sh` source installs its process-group trap when `RUNNER_MANUALLY_TRAP_SIG` is set; this wrapper sets that documented mode. The service wrapper also converts SIGTERM to SIGINT, so this wrapper does not claim completion merely because a signal was sent.
+
+This skeleton does not claim Windows service support. If you need automatic startup, follow the current GitHub and WSL2 guidance and test that separately.
+
+`start.sh` requires both `$HOME/actions-runner/.runner` and `$HOME/actions-runner/.credentials` after registration. It also exports `$HOME/.local/bin` for the pinned tools, enables the runner's documented manual signal trap for this explicit session, and checks that `run.sh` remains alive briefly before reporting success.
+
+## 6. Clean job-owned transient state
+
+The cleanup script is a dry run unless `--apply` is supplied:
+
+```bash
+./scripts/cleanup.sh
+./scripts/cleanup.sh --apply
+```
+
+It can remove only direct children of `$HOME/.local/share/black-box-runner/state/transient`. `start.sh` runs cleanup before `run.sh` accepts jobs. With Docker required, startup also removes only containers and volumes bearing `com.blackbox.runner.owner=black-box-ci`. The CI job template must apply that exact Docker label when creating temporary containers and volumes. Unlabeled or differently labeled Docker resources remain untouched. It refuses mounted-Windows paths, symlinks, root-like paths, and any other state directory. It refuses cleanup while the runner is live. It does not remove the runner installation, cache, workspace, logs, PID file, GitHub registration, Docker images, or build cache. It never runs a global Docker prune.
+
+## Validation on a non-Windows host
+
+From this directory:
+
+```bash
+./tests/validate.sh
+```
+
+The validation checks shell syntax, executable scripts, the required label, and that configured paths stay off `/mnt`. It does not prove WSL2, Docker Desktop integration, GitHub registration, network access, or real job execution. Run ShellCheck separately when available:
+
+```bash
+shellcheck scripts/*.sh tests/*.sh
+```
+
+## Optional Windows launcher
+
+From PowerShell, pass the Ubuntu path to this repository's `runner` directory:
+
+```powershell
+.\scripts\start-wsl.ps1 -Distro Ubuntu -LinuxProjectRunnerDir /home/YOUR_USER/BlackBox/runner
+```
+
+The helper opens a visible WSL session, starts the runner, prints status, and leaves an interactive Ubuntu shell open so WSL remains active until you close it. It does not set up Windows startup.
+
+## Package manager version in jobs
+
+If a repository job uses pnpm, use the version declared by that repository's `packageManager` field in `package.json` through Corepack. This runner skeleton does not pin a global pnpm version or install one on the host.
+
+### PowerShell syntax check
+
+From the Ubuntu WSL shell, parse the helper with the Windows PowerShell executable before running it:
+
+```powershell
+& /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command '$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile("\\wsl.localhost\Ubuntu\home\vbook\BlackBox\runner\scripts\start-wsl.ps1", [ref]$tokens, [ref]$errors) > $null; if ($errors.Count) { exit 1 }'
+```
+
+Replace `Ubuntu` and the checkout path if the WSL distribution or checkout differs.

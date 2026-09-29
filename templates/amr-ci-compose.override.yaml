@@ -1,0 +1,18 @@
+# Install as .github/blackbox/amr-ci-compose.override.yaml in AMR.
+# Cleanup may select resources only when all four labels match the active run.
+services:
+  postgres:
+    labels:
+      com.blackbox.runner.owner: "black-box-ci"
+      blackbox.managed: "true"
+      blackbox.owner: "${BLACKBOX_RUNNER_ID:?set runner id}"
+      blackbox.request_id: "${BLACKBOX_REQUEST_ID:?set request id}"
+      blackbox.run_id: "${BLACKBOX_RUN_ID:?set run id}"
+volumes:
+  postgres_data:
+    labels:
+      com.blackbox.runner.owner: "black-box-ci"
+      blackbox.managed: "true"
+      blackbox.owner: "${BLACKBOX_RUNNER_ID:?set runner id}"
+      blackbox.request_id: "${BLACKBOX_REQUEST_ID:?set request id}"
+      blackbox.run_id: "${BLACKBOX_RUN_ID:?set run id}"

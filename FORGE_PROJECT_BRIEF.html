@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Black Box: CI on your home PC</title>
+  <style>
+    :root {
+      --bg: #000;
+      --surface: #0a0a0a;
+      --elevated: #141414;
+      --hover: #1c1c1c;
+      --border: #2a2a2a;
+      --text: #f0f0f0;
+      --body: #d0d0d0;
+      --muted: #888;
+      --subtle: #555;
+      --cyan: #00e5ff;
+      --green: #0cee9c;
+      --yellow: #ffea00;
+      --red: #ff1744;
+      --purple: #d500f9;
+      --max-shell: 1760px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--body);
+      font-family: Inter, "SF Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+    }
+    a { color: var(--cyan); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    :focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+
+    .shell {
+      width: calc(100% - 64px);
+      max-width: var(--max-shell);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 64px;
+      padding: 44px 0 36px;
+    }
+    .sidebar {
+      position: sticky;
+      top: 28px;
+      align-self: start;
+      height: calc(100vh - 56px);
+      display: flex;
+      flex-direction: column;
+    }
+    .eyebrow, .label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .sidebar h2 {
+      margin: 10px 0 8px;
+      color: var(--text);
+      font-size: 18px;
+      line-height: 1.2;
+    }
+    .sidebar p { margin: 0 0 24px; color: var(--muted); font-size: 13px; }
+    .nav { border-left: 1px solid var(--border); }
+    .nav a {
+      display: block;
+      padding: 7px 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.3;
+      border-left: 2px solid transparent;
+      margin-left: -1px;
+    }
+    .nav a:hover { color: var(--text); text-decoration: none; }
+    .nav a.active { color: var(--cyan); border-left-color: var(--cyan); }
+    .sidebar .meta { margin-top: auto; color: var(--subtle); font-size: 12px; }
+
+    main { min-width: 0; }
+    .content { width: 100%; max-width: 1000px; margin: 0 auto; }
+    h1, h2, h3 { color: var(--text); font-weight: 650; }
+    h1 {
+      max-width: 900px;
+      margin: 14px 0 12px;
+      font-size: clamp(32px, 5vw, 43px);
+      line-height: 1.08;
+      letter-spacing: -.025em;
+    }
+    h2 { margin: 0 0 10px; font-size: clamp(22px, 3vw, 30px); line-height: 1.2; }
+    h3 { margin: 24px 0 8px; font-size: 18px; line-height: 1.25; }
+    p { margin: 0 0 16px; }
+    .lede { max-width: 830px; color: #bdbdbd; font-size: 18px; line-height: 1.55; }
+    .meta-line { color: var(--muted); font-size: 13px; margin-top: 18px; }
+    .meta-line span + span::before { content: " · "; color: var(--subtle); padding: 0 7px; }
+
+    .section {
+      border-top: 1px solid var(--border);
+      margin-top: 48px;
+      padding-top: 48px;
+      scroll-margin-top: 28px;
+    }
+    .section-intro { color: var(--muted); margin-bottom: 18px; }
+    .callout {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr);
+      gap: 12px;
+      padding: 16px 18px;
+      margin: 20px 0;
+      border-radius: 8px;
+    }
+    .callout.info { background: rgba(0, 229, 255, .10); }
+    .callout.warn { background: rgba(255, 234, 0, .10); }
+    .callout.success { background: rgba(12, 238, 156, .10); }
+    .callout.critical { background: rgba(255, 23, 68, .10); }
+    .callout .icon { color: var(--cyan); margin-top: 2px; }
+    .callout.warn .icon { color: var(--yellow); }
+    .callout.success .icon { color: var(--green); }
+    .callout.critical .icon { color: var(--red); }
+    .callout strong { color: var(--text); }
+    .callout p:last-child { margin-bottom: 0; }
+
+    .code-wrap {
+      position: relative;
+      width: 100%;
+      margin: 18px 0;
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      overflow: hidden;
+    }
+    .code-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 9px 13px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    pre { margin: 0; padding: 16px; overflow-x: auto; color: #ddd; font: 15px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .kw { color: var(--purple); }
+    .fn { color: #55e3f9; }
+    .str { color: var(--green); }
+    .num { color: #f6c107; }
+    .comment { color: var(--muted); }
+    .copy {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #202020;
+      color: var(--muted);
+      opacity: 0;
+      cursor: pointer;
+    }
+    .code-wrap:hover .copy, .copy:focus-visible { opacity: 1; }
+    .copy.copied { color: var(--green); }
+    .copy svg { width: 16px; height: 16px; }
+    @media (hover: none) { .copy { opacity: 1; } }
+
+    .pipeline { list-style: none; padding: 0; margin: 22px 0; }
+    .pipeline li { margin: 0; }
+    .pipeline li + li::before { content: "↓"; display: block; color: var(--cyan); margin: 5px 0 5px 22px; font-size: 23px; line-height: 1; }
+    .flow-step { display: grid; grid-template-columns: minmax(160px, 1fr) 2fr; gap: 20px; padding: 15px 18px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+    .flow-step strong { color: var(--text); font-weight: 600; }
+    .flow-step span { color: #bdbdbd; font-size: 14px; }
+    .flow-step.selected { border-color: #32737b; }
+    .source-link::after { content: " ↗"; font-size: .85em; }
+    .sources li { margin-bottom: 10px; }
+    .copy-status { min-height: 1.2em; font-size: 12px; color: var(--muted); }
+    .copy:disabled { cursor: default; }
+    .code-head { text-transform: none; letter-spacing: 0; }
+    .meta-line, .section-intro { color: #aaa; }
+    [hidden] { display: none !important; }
+    @media (max-width: 600px) {
+      .flow-step { grid-template-columns: 1fr; gap: 3px; }
+      table { overflow-wrap: anywhere; }
+    }
+
+    table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 18px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    th, td { padding: 12px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid #202020; }
+    th { color: var(--text); background: #181818; font-size: 13px; font-weight: 650; }
+    td { color: #c5c5c5; font-size: 14px; }
+    tr:last-child td { border-bottom: 0; }
+    td:first-child, th:first-child { width: 28%; }
+    td code, p code, li code { color: #e7e7e7; background: #181818; padding: 2px 5px; border-radius: 4px; font-size: .92em; }
+    ul, ol { padding-left: 22px; }
+    li { margin: 7px 0; }
+
+    .tabs { margin-top: 22px; }
+    .tablist { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; white-space: nowrap; }
+    .tablist::-webkit-scrollbar { display: none; }
+    .tab { flex: 0 0 auto; border: 0; border-radius: 6px; padding: 8px 12px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+    .tab[aria-selected="true"] { background: #202020; color: var(--text); }
+    .tabpanel { padding-top: 18px; }
+    .tabpanel[hidden] { display: none; }
+
+    details { width: 100%; margin: 14px 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+    summary { cursor: pointer; list-style: none; padding: 14px 16px; color: var(--text); font-weight: 600; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; float: right; color: var(--muted); font-size: 20px; font-weight: 400; line-height: 1; }
+    details[open] summary::after { content: "−"; }
+    details > div { padding: 0 16px 16px; }
+
+    .phase { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 22px; padding: 18px 0; border-bottom: 1px solid #202020; }
+    .phase:last-child { border-bottom: 0; }
+    .phase-number { color: var(--cyan); font: 700 13px/1.3 ui-monospace, monospace; }
+    .phase h3 { margin: 0 0 6px; }
+    .phase p:last-child { margin-bottom: 0; }
+    .status { color: var(--green); font-weight: 600; }
+    .target { color: var(--yellow); font-weight: 600; }
+
+    footer { border-top: 1px solid var(--border); margin-top: 48px; padding-top: 24px; color: var(--subtle); font-size: 12px; }
+    @media (max-width: 900px) {
+      .shell { width: calc(100% - 40px); grid-template-columns: 1fr; gap: 28px; padding-top: 28px; }
+      .sidebar { position: static; height: auto; }
+      .sidebar .meta { display: none; }
+      .nav { display: flex; overflow-x: auto; border-left: 0; border-bottom: 1px solid var(--border); scrollbar-width: none; }
+      .nav::-webkit-scrollbar { display: none; }
+      .nav a { flex: 0 0 auto; border-left: 0; border-bottom: 2px solid transparent; margin: 0; padding: 8px 10px; }
+      .nav a.active { border-left: 0; border-bottom-color: var(--cyan); }
+    }
+    @media (max-width: 600px) {
+      .shell { width: calc(100% - 32px); }
+      .lede { font-size: 16px; }
+      h1 { font-size: 32px; }
+      .phase { grid-template-columns: 1fr; gap: 4px; }
+      th, td { padding: 10px; }
+      table { font-size: 13px; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Document navigation">
+      <h2>Black Box</h2>
+      <p>GitHub Actions on your Windows PC, with free automatic routing.</p>
+      <nav class="nav" aria-label="Sections">
+        <a href="#idea">The idea</a>
+        <a href="#scorecard">What we know</a>
+        <a href="#architecture">The pipeline</a>
+        <a href="#workflow">Workflow impact</a>
+        <a href="#tradeoffs">Pros and cons</a>
+        <a href="#roadmap">First version</a>
+        <a href="#guardrails">Setup and terms</a>
+      </nav>
+      <div class="meta">29 September 2026<br>Plan only. Nothing deployed.</div>
+    </aside>
+    <main>
+      <div class="content">
+        <header id="idea">
+          <h1>Black Box: CI on your home PC</h1>
+          <p class="lede">Use Cloudflare Workers Free to choose where CI runs. Your WSL2 runner does the work and sends results directly to GitHub. The home path uses no GitHub-hosted minutes.</p>
+          <div class="meta-line"><span>Windows 11 stays</span><span>AMR Fan App first</span><span>One job at a time</span></div>
+          <p style="margin-top:18px">Reported hardware: 13th-gen i9-H, 16 GB RAM, about 750 GB free storage. A modest speed improvement is enough. Electricity, SSD wear, maintenance, and cold caches are accepted.</p>
+        </header>
+
+        <section class="section" id="scorecard">
+          <h2>What we know so far</h2>
+          <p class="section-intro">Policy checks and a source review, not a benchmark. No runner or Worker has been deployed.</p>
+          <table>
+            <thead><tr><th>Dimension</th><th>Status and evidence</th><th>Confidence / limit</th></tr></thead>
+            <tbody>
+              <tr><td>Home compute</td><td>GitHub documents self-hosted execution as free. <a href="#source-github">[1]</a></td><td>High for policy; 0 billing tests.</td></tr>
+              <tr><td>Cloudflare routing</td><td>Workers Free selected. Published limits checked. <a href="#source-workers">[2]</a></td><td>Real request volume and CPU use unmeasured.</td></tr>
+              <tr><td>AMR access</td><td>Private repo; current account has admin access. One metadata query.</td><td>High at time checked; App not installed.</td></tr>
+              <tr><td>Workflow fit</td><td>Two files, four Ubuntu jobs inspected.</td><td>Medium; 0 jobs run on WSL2.</td></tr>
+              <tr><td>Speed and routing</td><td>Unverified; 0 paired runs or end-to-end dispatch tests.</td><td>No speed score or multiplier claimed.</td></tr>
+            </tbody>
+          </table>
+          <details>
+            <summary>What “free” includes</summary>
+            <div>
+              <p>Workers Free allows 100,000 requests per account per day and 10 ms CPU per invocation. Network waiting is not CPU time. Stay on the Free plan and test usage. Limit errors must stop or defer routing, not enable paid services. <a href="#source-workers">[2]</a></p>
+              <p>A tiny D1 Free table can retain pending requests and reject duplicates. Its separate limits also need monitoring. It will not hold build logs, artifacts, or caches. <a href="#source-d1">[3]</a></p>
+              <p>Private GitHub-hosted jobs use included minutes. Blacksmith is a separate paid fallback. GitHub artifact and cache storage can still incur charges beyond allowances. These are separate from free routing and home compute. <a href="#source-github">[1]</a></p>
+            </div>
+          </details>
+        </section>
+
+        <section class="section" id="architecture">
+          <h2>How your computer receives the job</h2>
+          <p class="section-intro">Worker chooses. GitHub coordinates. WSL2 executes.</p>
+          <ol class="pipeline" aria-label="Home CI pipeline">
+            <li><div class="flow-step"><strong>1. You push to GitHub</strong><span>GitHub sends the App a webhook with repository, commit, and pull-request metadata.</span></div></li>
+            <li><div class="flow-step selected"><strong>2. Cloudflare Worker</strong><span>Verify the event and trusted repo. Check availability and cost policy. Choose home, an enabled fallback, or waiting.</span></div></li>
+            <li><div class="flow-step"><strong>3. Back to GitHub</strong><span>Worker calls GitHub’s API to start the workflow with the selected runner and intended commit. No hosted routing job.</span></div></li>
+            <li><div class="flow-step selected"><strong>4. Windows + WSL2</strong><span>The official runner collects its job from GitHub. It runs AMR’s commands and reuses local package and Docker caches.</span></div></li>
+            <li><div class="flow-step"><strong>5. Results in GitHub</strong><span>The runner uploads logs and results directly. The App associates the result with the original pull-request commit.</span></div></li>
+          </ol>
+          <p>The PC connects outward over HTTPS. No home port forwarding or tunnel is needed. Worker handles routing metadata, not source downloads, Docker layers, or CI logs. <a href="#source-runner">[4]</a></p>
+          <div class="tabs">
+            <div class="tablist" role="tablist" aria-label="Operating paths" hidden>
+              <button class="tab" id="tab-home" type="button" role="tab" aria-selected="true" aria-controls="panel-home">PC ready</button>
+              <button class="tab" id="tab-offline" type="button" role="tab" aria-selected="false" aria-controls="panel-offline" tabindex="-1">PC offline or full</button>
+              <button class="tab" id="tab-ai" type="button" role="tab" aria-selected="false" aria-controls="panel-ai" tabindex="-1">Optional AI later</button>
+            </div>
+            <div class="tabpanel" id="panel-home" role="tabpanel" aria-labelledby="tab-home" tabindex="0">
+              <p>Windows, WSL2, and the runner must be running. Docker must be available for database and container tests. Begin with one concurrent job for the shared 16 GB RAM budget.</p>
+            </div>
+            <div class="tabpanel" id="panel-offline" role="tabpanel" aria-labelledby="tab-offline" tabindex="0">
+              <p>If no allowed fallback is available, keep the request waiting and retry. GitHub-hosted fallback needs permission to consume private-repo minutes; Blacksmith needs installation and its own budget. Worker cannot wake a powered-off PC or move an already-running job to another provider.</p>
+            </div>
+            <div class="tabpanel" id="panel-ai" role="tabpanel" aria-labelledby="tab-ai" tabindex="0">
+              <p>AI can later explain selected failure logs or propose a fix for a separate small fee. CI runs without AI. Proposed patches need tests and your normal review.</p>
+            </div>
+          </div>
+          <p>No fallback spend is enabled by this plan. Automatic routing does not make fallback compute free.</p>
+        </section>
+
+        <section class="section" id="workflow">
+          <h2>What changes in your workflow</h2>
+          <p>Workflows stay in <code>.github/workflows/</code>. A dispatch input chooses the runner before GitHub queues the job. This automatic version needs more configuration than changing one <code>runs-on</code> line. <a href="#source-dispatch">[5]</a></p>
+          <div class="code-wrap">
+            <div class="code-head"><span>Illustration only, not an installable workflow</span><span>YAML</span></div>
+            <pre><code><span class="kw">on</span>:
+  workflow_dispatch:
+    inputs:
+      runner:
+        type: choice
+        options: [black-box-linux]
+        default: black-box-linux
+        required: <span class="kw">true</span>
+      commit:
+        type: string
+        required: <span class="kw">true</span>
+
+<span class="kw">jobs</span>:
+  local-checks:
+    runs-on: <span class="str">${{ inputs.runner }}</span>
+    <span class="comment"># Checkout the validated commit.
+    # Preserve the existing AMR steps.</span></code></pre>
+            <button class="copy" type="button" aria-label="Copy illustrative YAML" title="Copy illustrative YAML" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M5 16H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1"></path></svg></button>
+          </div>
+          <p class="copy-status" role="status" aria-live="polite"></p>
+          <p><code>black-box-linux</code> is a proposed label. Only configured providers may enter the allowlist. Preserve AMR’s commands, pinned Actions, timeouts, security schedule, and cancellation behavior.</p>
+          <p>PR integration needs a real test: a dispatched run has a different event context. Test the intended revision, preserve merge-check behavior, and attach the result to the right PR commit. Replace original triggers carefully to avoid duplicate hosted runs.</p>
+        </section>
+
+        <section class="section" id="tradeoffs">
+          <h2>Pros and cons for your setup</h2>
+          <table>
+            <thead><tr><th>Benefit</th><th>Remaining tradeoff</th></tr></thead>
+            <tbody>
+              <tr><td>No hosted minutes for routing or home execution.</td><td>Worker quotas, API errors, and GitHub storage still need visibility.</td></tr>
+              <tr><td>Keep Windows and the existing WSL2 installation.</td><td>Sleep, restarts, and shared RAM affect availability.</td></tr>
+              <tr><td>Disk caches survive normal shutdown.</td><td>Actual speed and cache reuse need measurement. Cold runs are acceptable.</td></tr>
+              <tr><td>Keep familiar CI commands and GitHub feedback.</td><td>Automatic dispatch and correct PR checks add integration work.</td></tr>
+              <tr><td>AI can build code, scripts, tests, and docs.</td><td>Account access and real-PC verification still take setup work.</td></tr>
+            </tbody>
+          </table>
+          <p>Electricity, wear, and routine maintenance are already accepted. No microVM platform or Linux reinstall is required for the first version.</p>
+        </section>
+
+        <section class="section" id="roadmap">
+          <h2>A focused first version for tomorrow</h2>
+          <p class="section-intro">Target: 30 September 2026. Feasibility depends on PC and account access. The full Blacksmith-style product is later work.</p>
+          <div class="phase"><div class="phase-number">Host</div><div><h3>Make one runner work</h3><p>Check WSL2, tool versions, and Docker. Provide setup, start, stop, and status commands. Prove reconnect after a restart.</p></div></div>
+          <div class="phase"><div class="phase-number">AMR</div><div><h3>Run the existing checks</h3><p>Start with <code>local-checks</code>, then Docker/PostgreSQL and security jobs. Prove job-owned cleanup and a second run with cache reuse. Use an existing hosted run as the baseline where possible to preserve minutes.</p></div></div>
+          <div class="phase"><div class="phase-number">Routing</div><div><h3>Connect Worker and GitHub</h3><p>Verify signed events, reject unknown repos, deduplicate requests, dispatch the right revision, and report PR results. Test a deliberate failure and a PC-off request without unauthorized fallback spend.</p></div></div>
+          <div class="phase"><div class="phase-number">Handoff</div><div><h3>Make it operable</h3><p>Document setup, recovery, cache cleanup, retention, uninstall, and fallback policy. Measure Worker CPU and verify the home path has no hosted routing job.</p></div></div>
+          <details>
+            <summary>Keep the larger project for later</summary>
+            <div><p>Global log search, slow-step history, flaky-test reports, PR summaries, AI explanations and verified fix proposals can follow. Transparent cache replacement, network debugging, disposable job environments, and smarter scheduling wait for a measured need.</p><p>Test history needs structured reports; logs alone cannot prove every flaky test. No headline speed multiplier is required.</p></div>
+          </details>
+        </section>
+
+        <section class="section" id="guardrails">
+          <h2>Setup decisions in plain English</h2>
+          <details>
+            <summary>Windows, Firecracker, KVM, and image drift</summary>
+            <div><p>The runner is GitHub’s program that executes jobs. The dispatcher is the Worker that chooses the runner. WSL2 supplies Linux while Windows stays installed. Docker supports WSL2 integration; check the existing setup before installing another engine. <a href="#source-wsl">[6]</a></p><p>Image drift means GitHub and your PC have different tool versions. A documented version checklist and real workflow tests are enough to start.</p><p>KVM runs virtual machines on Linux. Firecracker uses it to create small VMs. Neither is needed for v0.1. <a href="#source-firecracker">[7]</a></p></div>
+          </details>
+          <details>
+            <summary>What happens to the caches when the PC is off?</summary>
+            <div><p>Files on disk remain after a normal shutdown. RAM does not. Downloads happen on a cache miss; caches do not need constant writing while idle. Keep the workspace and package cache in WSL’s Linux filesystem.</p><p>Start with local pnpm and Docker builder state. GitHub’s <code>actions/cache</code> still uses GitHub storage by default on self-hosted runners. Replacing that service is separate work. <a href="#source-cache">[8]</a></p></div>
+          </details>
+          <details>
+            <summary>Trusted code and private repositories</summary>
+            <div><p>Allow only repositories and executable code you trust. School-repo setup still needs its owner’s authorization. AMR admin access has been observed, but no App is installed.</p><p>Local storage does not automatically protect personal files. Use CI-owned workspaces and database volumes. A persistent WSL runner is not a fresh isolated machine per job.</p><p>Cloudflare processes private repository metadata and holds App credentials securely. Verify webhook signatures and expose no public job history. Builds and logs do not pass through Worker.</p></div>
+          </details>
+          <details>
+            <summary>Official sources and evidence scope</summary>
+            <div>
+              <p>Checked 29 September 2026. AMR evidence is limited to two local workflow files and one read-only access query. No runtime or billing test has occurred.</p>
+              <ol class="sources">
+                <li id="source-github"><a class="source-link" href="https://docs.github.com/en/billing/concepts/product-billing/github-actions" target="_blank" rel="noopener noreferrer">GitHub Actions billing</a>: self-hosted execution, private hosted minutes, and storage.</li>
+                <li id="source-workers"><a class="source-link" href="https://developers.cloudflare.com/workers/platform/pricing/" target="_blank" rel="noopener noreferrer">Workers pricing</a> and <a class="source-link" href="https://developers.cloudflare.com/workers/platform/limits/" target="_blank" rel="noopener noreferrer">limits</a>: Free plan request and CPU caps.</li>
+                <li id="source-d1"><a class="source-link" href="https://developers.cloudflare.com/d1/platform/pricing/" target="_blank" rel="noopener noreferrer">D1 pricing</a>: separate Free plan database limits.</li>
+                <li id="source-runner"><a class="source-link" href="https://docs.github.com/en/actions/reference/runners/self-hosted-runners" target="_blank" rel="noopener noreferrer">Self-hosted runner reference</a>: communication, platforms, and job routing.</li>
+                <li id="source-dispatch"><a class="source-link" href="https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event" target="_blank" rel="noopener noreferrer">Workflow dispatch API</a> and <a class="source-link" href="https://docs.github.com/en/actions/reference/workflows-and-actions/contexts" target="_blank" rel="noopener noreferrer">workflow contexts</a>: dispatch inputs and runner expressions.</li>
+                <li id="source-wsl"><a class="source-link" href="https://learn.microsoft.com/en-us/windows/wsl/about" target="_blank" rel="noopener noreferrer">Microsoft WSL</a> and <a class="source-link" href="https://docs.docker.com/desktop/features/wsl/" target="_blank" rel="noopener noreferrer">Docker WSL guidance</a>: Linux on Windows and Docker integration.</li>
+                <li id="source-firecracker"><a class="source-link" href="https://github.com/firecracker-microvm/firecracker" target="_blank" rel="noopener noreferrer">Firecracker project</a>: Linux KVM microVMs.</li>
+                <li id="source-cache"><a class="source-link" href="https://docs.github.com/en/actions/concepts/workflows-and-actions/dependency-caching" target="_blank" rel="noopener noreferrer">GitHub dependency caching</a>: hosted cache storage on self-hosted runners.</li>
+              </ol>
+            </div>
+          </details>
+        </section>
+        <footer>29 September 2026 · Local planning brief. Runtime and rendered visual behavior remain unverified.</footer>
+      </div>
+    </main>
+  </div>
+  <script>
+    (() => {
+      const navLinks = [...document.querySelectorAll('.nav a')];
+      const sections = navLinks.map(link => document.querySelector(link.getAttribute('href'))).filter(Boolean);
+      const updateActive = () => {
+        const at = window.scrollY + 80;
+        let current = sections[0];
+        for (const section of sections) if (section.offsetTop <= at) current = section;
+        navLinks.forEach(link => {
+          const active = link.getAttribute('href') === '#' + current.id;
+          link.classList.toggle('active', active);
+          if (active) link.setAttribute('aria-current', 'location');
+          else link.removeAttribute('aria-current');
+        });
+      };
+      window.addEventListener('scroll', updateActive, { passive: true });
+      updateActive();
+
+      document.querySelectorAll('.copy').forEach(button => {
+        button.hidden = false;
+        button.addEventListener('click', async () => {
+          const code = button.closest('.code-wrap').querySelector('code').textContent;
+          const status = document.querySelector('.copy-status');
+          try {
+            if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+            await navigator.clipboard.writeText(code);
+            status.textContent = 'Illustrative YAML copied.';
+            button.classList.add('copied');
+          } catch {
+            status.textContent = 'Select the code and copy it manually; clipboard access is unavailable.';
+          }
+        });
+      });
+
+      document.querySelectorAll('[role="tablist"]').forEach(list => {
+        const tabs = [...list.querySelectorAll('[role="tab"]')];
+        const select = tab => {
+          tabs.forEach(item => {
+            const selected = item === tab;
+            item.setAttribute('aria-selected', String(selected));
+            item.tabIndex = selected ? 0 : -1;
+            document.getElementById(item.getAttribute('aria-controls')).hidden = !selected;
+          });
+        };
+        list.hidden = false;
+        select(tabs[0]);
+        tabs.forEach((tab, index) => {
+          tab.addEventListener('click', () => select(tab));
+          tab.addEventListener('keydown', event => {
+            let next;
+            if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+            else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+            else if (event.key === 'Home') next = 0;
+            else if (event.key === 'End') next = tabs.length - 1;
+            else return;
+            event.preventDefault();
+            tabs[next].focus();
+            select(tabs[next]);
+          });
+        });
+      });
+
+      const revealSource = () => {
+        if (!location.hash.startsWith('#source-')) return;
+        const target = document.getElementById(location.hash.slice(1));
+        const detail = target && target.closest('details');
+        if (detail) { detail.open = true; target.scrollIntoView(); }
+      };
+      window.addEventListener('hashchange', revealSource);
+      revealSource();
+    })();
+  </script>
+</body>
+</html>

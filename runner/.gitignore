@@ -1,0 +1,6 @@
+# Local operator configuration may contain repository URLs or accidental secrets.
+runner.env
+
+# Local runtime state if the project directory is used as the config location.
+*.log
+*.pid

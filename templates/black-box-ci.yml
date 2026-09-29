@@ -1,0 +1,238 @@
+# AMR migration candidate. Owner review required before copying to AMR.
+# Dispatcher input contract: runner=home|github|blacksmith, commit_sha=exact
+# tested revision, head_sha=original PR head, request_id=UUID,
+# source_ref=original ref, pr_number=optional decimal string.
+name: Black Box CI
+
+run-name: black-box:${{ inputs.request_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: Reviewed provider choice
+        required: true
+        type: choice
+        default: home
+        options: [home, github, blacksmith]
+      commit_sha:
+        description: Exact full SHA to test
+        required: true
+        type: string
+      head_sha:
+        description: Original PR head SHA, or tested SHA for non-PR runs
+        required: true
+        type: string
+      request_id:
+        description: UUID for Worker correlation
+        required: true
+        type: string
+      source_ref:
+        description: Original Git ref for cancellation and audit
+        required: true
+        type: string
+      source_event:
+        description: Original GitHub event kind
+        required: true
+        type: string
+      pr_number:
+        description: Optional decimal PR number
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ inputs.source_ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-checks:
+    if: inputs.source_event != 'schedule'
+    runs-on: ${{ fromJSON(inputs.runner == 'home' && '["self-hosted","linux","x64","black-box-linux"]' || inputs.runner == 'github' && vars.BLACK_BOX_GITHUB_ENABLED == 'true' && '["ubuntu-24.04"]' || inputs.runner == 'blacksmith' && vars.BLACK_BOX_BLACKSMITH_ENABLED == 'true' && vars.BLACK_BOX_BLACKSMITH_RUNS_ON_JSON || '[]') }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.commit_sha }}
+          fetch-depth: 0
+      - name: Verify exact checkout
+        shell: bash
+        env:
+          EXPECTED_COMMIT: ${{ inputs.commit_sha }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          REQUEST_ID: ${{ inputs.request_id }}
+        run: |
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$REQUEST_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]
+          test "$(git rev-parse HEAD)" = "${EXPECTED_COMMIT,,}"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - name: Export native production bundles
+        run: pnpm exec expo export --platform all
+
+  local-postgres:
+    if: inputs.source_event != 'schedule'
+    env:
+      AMR_DB_CI_MODE: "true"
+      AMR_LOCAL_DB_PROJECT: blackbox-amr-${{ github.run_id }}-${{ github.run_attempt }}
+      BLACKBOX_RUNNER_ID: black-box-ci
+      BLACKBOX_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      BLACKBOX_REQUEST_ID: ${{ inputs.request_id }}
+    runs-on: ${{ fromJSON(inputs.runner == 'home' && '["self-hosted","linux","x64","black-box-linux"]' || inputs.runner == 'github' && vars.BLACK_BOX_GITHUB_ENABLED == 'true' && '["ubuntu-24.04"]' || inputs.runner == 'blacksmith' && vars.BLACK_BOX_BLACKSMITH_ENABLED == 'true' && vars.BLACK_BOX_BLACKSMITH_RUNS_ON_JSON || '[]') }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.commit_sha }}
+          fetch-depth: 0
+      - name: Verify exact checkout
+        shell: bash
+        env:
+          EXPECTED_COMMIT: ${{ inputs.commit_sha }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          REQUEST_ID: ${{ inputs.request_id }}
+        run: |
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$REQUEST_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]
+          test "$(git rev-parse HEAD)" = "${EXPECTED_COMMIT,,}"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - run: pnpm install --frozen-lockfile
+      - name: Set runner transient paths
+        shell: bash
+        run: |
+          auth_dir="$HOME/.local/share/black-box-runner/state/transient/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/auth"
+          {
+            printf 'AMR_LOCAL_DB_AUTH_DIR=%s\n' "$auth_dir"
+            printf 'AMR_LOCAL_DB_COMPOSE_FILE=%s\n' "$GITHUB_WORKSPACE/.github/blackbox/amr-ci-compose.override.yaml"
+            printf 'BLACKBOX_RUNNER_ID=black-box-ci\n'
+            printf 'BLACKBOX_RUN_ID=%s-%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+            printf 'BLACKBOX_REQUEST_ID=%s\n' '${{ inputs.request_id }}'
+          } >> "$GITHUB_ENV"
+      - name: Require AMR CI database isolation patch
+        id: db-preflight
+        shell: bash
+        run: |
+          bash .github/blackbox/ci-preflight.sh
+          test ! -e "$AMR_LOCAL_DB_AUTH_DIR/owner.json"
+      - run: pnpm db:up --port 55432
+      - run: pnpm db:verify
+      - run: pnpm db:test
+      - run: pnpm participation:test:database
+      - run: pnpm account:test:database
+      - run: pnpm points:test:database
+      - run: pnpm route:test:database
+      - run: pnpm journey:test:database
+      - run: pnpm awards:test:database
+      - run: pnpm submissions:test:database
+      - run: pnpm rewards:test:database
+      - name: Build the pinned offline report parser
+        run: |
+          docker build --tag "amr-report-parser:ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --iidfile "$RUNNER_TEMP/report-parser-image-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" -f server/reports/Dockerfile .
+          echo "REPORT_PARSER_IMAGE=$(cat "$RUNNER_TEMP/report-parser-image-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}")" >> "$GITHUB_ENV"
+          node --input-type=module -e 'import {namespaceFor} from "./scripts/local-db.mjs"; import {appendFileSync} from "node:fs"; appendFileSync(process.env.GITHUB_ENV, "REPORT_TEST_STORAGE="+process.env.RUNNER_TEMP+"/"+namespaceFor(process.cwd())+"/test\n");'
+      - run: pnpm reports:test:container
+      - run: pnpm reports:test:database
+      - name: Remove only the runner's report parser image
+        if: always()
+        run: docker image rm "amr-report-parser:ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" || test ! -f "$RUNNER_TEMP/report-parser-image-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+      - name: Stop only this run's database (source teardown)
+        if: ${{ always() && steps.db-preflight.outcome == 'success' }}
+        run: pnpm db:stop
+      - name: Remove only this run's database and authentication files
+        if: always()
+        shell: bash
+        run: |
+          owner="${AMR_LOCAL_DB_AUTH_DIR:-}/owner.json"
+          if test -f "$owner"; then
+            AMR_DB_PORT="$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).port' "$owner")"
+            export AMR_DB_PORT
+            export AMR_DB_PASSWORD_FILE="$AMR_LOCAL_DB_AUTH_DIR/postgres-password"
+            test "$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).project' "$owner")" = "$AMR_LOCAL_DB_PROJECT"
+            test "$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).worktree' "$owner")" = "$GITHUB_WORKSPACE"
+            pnpm db:stop
+            docker compose --project-name "$AMR_LOCAL_DB_PROJECT" --file compose.yaml --file "$AMR_LOCAL_DB_COMPOSE_FILE" down --volumes --remove-orphans
+          fi
+          case "${AMR_LOCAL_DB_AUTH_DIR:-}" in "$HOME"/.local/share/black-box-runner/state/transient/"$GITHUB_RUN_ID"-"$GITHUB_RUN_ATTEMPT"/auth) rm -rf -- "$AMR_LOCAL_DB_AUTH_DIR" ;; *) echo 'Refusing unexpected auth dir' >&2; exit 1 ;; esac
+
+  source-and-dependencies:
+    runs-on: ${{ fromJSON(inputs.runner == 'home' && '["self-hosted","linux","x64","black-box-linux"]' || inputs.runner == 'github' && vars.BLACK_BOX_GITHUB_ENABLED == 'true' && '["ubuntu-24.04"]' || inputs.runner == 'blacksmith' && vars.BLACK_BOX_BLACKSMITH_ENABLED == 'true' && vars.BLACK_BOX_BLACKSMITH_RUNS_ON_JSON || '[]') }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.commit_sha }}
+          fetch-depth: 0
+      - name: Verify exact checkout
+        shell: bash
+        env:
+          EXPECTED_COMMIT: ${{ inputs.commit_sha }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          REQUEST_ID: ${{ inputs.request_id }}
+        run: |
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$REQUEST_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]
+          test "$(git rev-parse HEAD)" = "${EXPECTED_COMMIT,,}"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:tooling
+      - run: pnpm security:check
+
+  dast-tooling:
+    runs-on: ${{ fromJSON(inputs.runner == 'home' && '["self-hosted","linux","x64","black-box-linux"]' || inputs.runner == 'github' && vars.BLACK_BOX_GITHUB_ENABLED == 'true' && '["ubuntu-24.04"]' || inputs.runner == 'blacksmith' && vars.BLACK_BOX_BLACKSMITH_ENABLED == 'true' && vars.BLACK_BOX_BLACKSMITH_RUNS_ON_JSON || '[]') }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.commit_sha }}
+          fetch-depth: 0
+      - name: Verify exact checkout
+        shell: bash
+        env:
+          EXPECTED_COMMIT: ${{ inputs.commit_sha }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          REQUEST_ID: ${{ inputs.request_id }}
+        run: |
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$REQUEST_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]
+          test "$(git rev-parse HEAD)" = "${EXPECTED_COMMIT,,}"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+      - name: Prove scanner acceptance and rejection with synthetic fixtures
+        run: node scripts/security.mjs dast-self-test
+      - name: Report application DAST applicability
+        id: target
+        run: node scripts/security.mjs dast-status
+      - name: Scan the configured application
+        if: steps.target.outputs.applicable == 'true'
+        run: node scripts/security.mjs dast
+      - name: Keep synthetic scanner evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dast-scanner-self-test
+          path: |
+            .evidence/security/safe/
+            .evidence/security/unsafe/
+          retention-days: 7
+          if-no-files-found: warn

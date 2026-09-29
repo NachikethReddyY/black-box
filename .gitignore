@@ -1,0 +1,15 @@
+node_modules/
+.wrangler/
+worker/.dev.vars
+worker/.env*
+*.log
+.DS_Store
+runner/.state/
+runner/cache/
+runner/work/
+
+.wrangler-test/
+__pycache__/
+*.pyc
+worker/wrangler.local.toml
+worker/.env
