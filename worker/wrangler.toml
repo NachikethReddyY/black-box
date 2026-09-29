@@ -2,12 +2,17 @@ name = "blackbox-worker-dispatcher"
 main = "src/index.ts"
 compatibility_date = "2026-09-29"
 
+[assets]
+directory = "../dashboard/dist"
+binding = "ASSETS"
+
 [vars]
 # Safe local defaults. Set secrets with `wrangler secret put` only when needed.
 DISPATCH_RUNNERS = "home,waiting"
 GITHUB_WORKFLOW_FILE = "black-box-ci.yml"
 GITHUB_WORKFLOW_REF = "main"
 HOME_RUNNER_LABEL = "black-box-linux"
+GITHUB_OAUTH_CLIENT_ID = "Iv23liMauN7uWCt9bzDB"
 TRUSTED_REPOSITORIES = "NachikethReddyY/AMR-Fan-App"
 TRUSTED_ACTORS = "NachikethReddyY"
 ENABLE_PAID_FALLBACKS = "false"

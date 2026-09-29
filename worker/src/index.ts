@@ -4,6 +4,8 @@ import { createGitHubApi, exactSha, object } from './github';
 import { retryRequest, tick } from './orchestrator';
 import { verifyGitHubSignature } from './signature';
 import type { DispatchRequest, WorkerEnv } from './types';
+import { handleDashboardRequest } from './dashboard';
+import { handleHostTelemetry } from './host';
 const json = (body: unknown, status: number) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 const login = (value: unknown) => typeof value === 'string' ? value.toLowerCase() : '';
 async function bodyText(request: Request) {
@@ -71,8 +73,14 @@ export async function scheduled(cron: string, time: number, env: WorkerEnv) {
 const worker: ExportedHandler<WorkerEnv> = {
   async fetch(request,env) {
     const path = new URL(request.url).pathname;
+    if (path === '/agent/telemetry') return handleHostTelemetry(request, env);
+    const dashboardResponse = await handleDashboardRequest(request, env);
+    if (dashboardResponse) return dashboardResponse;
     if (path === '/webhook') return handleWebhook(request,env);
-    if (!env.OPERATOR_TOKEN || request.headers.get('Authorization') !== `Bearer ${env.OPERATOR_TOKEN}`) return json({error:'not_found'},404);
+    if (!env.OPERATOR_TOKEN || request.headers.get('Authorization') !== `Bearer ${env.OPERATOR_TOKEN}`) {
+      if (env.ASSETS && request.method === 'GET') return env.ASSETS.fetch(request);
+      return json({error:'not_found'},404);
+    }
     const match = /^\/requests\/([0-9a-f-]{36})(\/retry)?$/.exec(path);
     if (!match) return json({error:'not_found'},404);
     const store = new D1RequestStore(env.DB);
