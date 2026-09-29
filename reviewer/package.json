@@ -1,0 +1,26 @@
+{
+  "name": "@blackbox/reviewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "cli": "tsx src/cli.ts",
+    "doctor": "tsx src/cli.ts doctor",
+    "review": "tsx src/cli.ts review",
+    "pr-preview": "tsx src/cli.ts pr-preview",
+    "status": "tsx src/cli.ts status",
+    "backup": "tsx src/cli.ts backup",
+    "restore": "tsx src/cli.ts restore",
+    "export": "tsx src/cli.ts export"
+  },
+  "dependencies": {
+    "typescript": "^5.9.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "tsx": "^4.20.5"
+  }
+}

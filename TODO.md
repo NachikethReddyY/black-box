@@ -48,3 +48,17 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [ ] Add authenticated WSL host metrics ingestion and resource view.
 - [x] Verify the dashboard shell, Run History, Logs, Runners, search, responsive layout, and production build in a browser.
 - [ ] Document and implement the OAuth credential gate.
+
+## Self-hosted AI reviewer planning (thread current, 29 September 2026)
+
+- [x] Inspect Black Box hosting, Worker, runner, dashboard, and existing reviewer integration points.
+- [x] Produce implementation, architecture, AI pipeline, cost, threat, evaluation, backlog, operations, limitation, and feature traceability documents.
+- [x] Add GitHub inline review-thread anchoring, PR-description marker rules, and Check Run Agent boundaries.
+- [x] Add replaceable cheap-model ensemble design, specialist roles, evidence verification, model registry, per-role reservations, and ablation pilot.
+- [x] Add Greptile-inspired graph indexing, bounded swarm review, custom rules, approved learning, agent handoff, security/SCA evidence, partner context, and deferred runtime validation.
+- [x] Recenter the plan on the AI code-review product goal, with matched quality/cost/reliability scorecards instead of vendor feature parity.
+- [x] Reconcile the four-call schedule, route capability fixtures, causal finding evidence, persistent finding identity, lease fencing, and P1 secret scan/redaction boundary.
+- [x] Configure the persistent reviewer for the Windows PC plus WSL2 Linux filesystem and reserve Daytona for disposable P3 runtime validation only.
+- [x] Add the complete self-contained T-01..T-36 acceptance definitions and align P1/P2/P3 phase ownership.
+- [x] Validate source notes, traceability IDs, acceptance IDs, required documents, and whitespace.
+- [ ] After planning approval, implement the inert reviewer foundation and run the P0/P1 gates before connecting models or publishing to GitHub.
