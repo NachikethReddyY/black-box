@@ -15,6 +15,8 @@ from pathlib import Path
 
 DEFAULT_DB = Path.home() / ".local/share/black-box-runner/history.sqlite3"
 MAX_LOG_BYTES = 2 * 1024 * 1024
+MAX_MANIFEST_BYTES = 32 * 1024
+RUN_OUTCOMES = ("queued", "running", "passed", "failed", "cancelled", "skipped", "unknown")
 SECRET_PATTERNS = (
     (re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"), "[REDACTED_GITHUB_TOKEN]"),
     (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"), "[REDACTED_GITHUB_TOKEN]"),
@@ -83,6 +85,14 @@ def init(db: sqlite3.Connection) -> None:
           bytes INTEGER,
           created_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS execution_manifests (
+          run_id TEXT PRIMARY KEY REFERENCES runs(run_id) ON DELETE CASCADE,
+          repository TEXT NOT NULL,
+          workflow TEXT NOT NULL,
+          job TEXT NOT NULL,
+          manifest_json TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS history_meta (
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL
@@ -112,6 +122,44 @@ def init(db: sqlite3.Connection) -> None:
 
 def require_run(db: sqlite3.Connection, run_id: str, repository: str = "local") -> None:
     db.execute("INSERT OR IGNORE INTO runs(run_id,repository,workflow,job,outcome,created_at) VALUES(?,?,?,?,?,?)", (run_id, repository, "unknown", "unknown", "unknown", int(time.time() * 1000)))
+
+
+def record_run(
+    db: sqlite3.Connection,
+    run_id: str,
+    repository: str,
+    workflow: str,
+    job: str,
+    commit_sha: str | None,
+    outcome: str,
+    duration_ms: int | None,
+    runner: str | None,
+) -> None:
+    if not run_id or len(run_id) > 200 or "\n" in run_id or "\r" in run_id:
+        raise ValueError("run_id must be a bounded single-line value")
+    if outcome not in RUN_OUTCOMES:
+        raise ValueError(f"outcome must be one of {RUN_OUTCOMES}")
+    if commit_sha is not None and not re.fullmatch(r"[0-9a-fA-F]{40}", commit_sha):
+        raise ValueError("commit_sha must be a 40-character SHA-1 hex value")
+    if duration_ms is not None and (duration_ms < 0 or duration_ms > 31 * 24 * 60 * 60 * 1000):
+        raise ValueError("duration_ms is outside the bounded range")
+    for value, field, limit in ((repository, "repository", 200), (workflow, "workflow", 200), (job, "job", 200)):
+        _manifest_text(value, field, limit)
+    if runner:
+        _manifest_text(runner, "runner", 200)
+    now = int(time.time() * 1000)
+    existing = db.execute("SELECT 1 FROM runs WHERE run_id=?", (run_id,)).fetchone()
+    if existing:
+        db.execute(
+            "UPDATE runs SET repository=?,workflow=?,job=?,commit_sha=?,outcome=?,duration_ms=?,runner=? WHERE run_id=?",
+            (repository, workflow, job, commit_sha.lower() if commit_sha else None, outcome, duration_ms, runner, run_id),
+        )
+    else:
+        db.execute(
+            "INSERT INTO runs(run_id,repository,workflow,job,commit_sha,outcome,duration_ms,runner,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+            (run_id, repository, workflow, job, commit_sha.lower() if commit_sha else None, outcome, duration_ms, runner, now),
+        )
+    db.commit()
 
 
 def parse_level(line: str) -> tuple[str, str]:
@@ -176,6 +224,64 @@ def record_cache(db: sqlite3.Connection, run_id: str, kind: str, cache_key: str,
     db.commit()
 
 
+def _manifest_text(value: str, field: str, limit: int = 512) -> str:
+    if not isinstance(value, str) or not value or len(value) > limit or "\n" in value or "\r" in value:
+        raise ValueError(f"{field} must be a bounded single-line value")
+    if re.search(r"(?i)(authorization|bearer|password|secret|token|api[_-]?key)\s*[:=]", value):
+        raise ValueError(f"{field} contains a secret-like assignment")
+    return redact(value)
+
+
+def _manifest_hash(value: str, field: str) -> str:
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", value):
+        raise ValueError(f"{field} must be a SHA-256 hex digest")
+    return value.lower()
+
+
+def record_manifest(
+    db: sqlite3.Connection,
+    *,
+    run_id: str,
+    repository: str,
+    workflow: str,
+    job: str,
+    commit_sha: str,
+    command: str,
+    workdir: str,
+    environment_fingerprint: str,
+    lockfile_hash: str,
+    services: tuple[str, ...],
+    test_selection: str,
+) -> None:
+    """Store a bounded replay description, never a runner environment or secret."""
+
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", commit_sha):
+        raise ValueError("commit_sha must be a 40-character SHA-1 hex value")
+    if len(services) > 32 or any(not isinstance(service, str) or not service or len(service) > 256 or "\n" in service or "\r" in service for service in services):
+        raise ValueError("services must be a bounded list of single-line image references")
+    payload = {
+        "repository": _manifest_text(repository, "repository", 200),
+        "workflow": _manifest_text(workflow, "workflow", 200),
+        "job": _manifest_text(job, "job", 200),
+        "commit_sha": commit_sha.lower(),
+        "command": _manifest_text(command, "command", 2000),
+        "workdir": _manifest_text(workdir, "workdir", 512),
+        "environment_fingerprint": _manifest_hash(environment_fingerprint, "environment_fingerprint"),
+        "lockfile_hash": _manifest_hash(lockfile_hash, "lockfile_hash"),
+        "services": [redact(service) for service in services],
+        "test_selection": "" if not test_selection else _manifest_text(test_selection, "test_selection", 1000),
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    if len(encoded.encode("utf-8")) > MAX_MANIFEST_BYTES:
+        raise ValueError("manifest exceeds the bounded size")
+    require_run(db, run_id, repository)
+    db.execute(
+        "INSERT OR REPLACE INTO execution_manifests(run_id,repository,workflow,job,manifest_json,created_at) VALUES(?,?,?,?,?,?)",
+        (run_id, repository, workflow, job, encoded, int(time.time() * 1000)),
+    )
+    db.commit()
+
+
 def search(db: sqlite3.Connection, query: str, limit: int) -> list[dict[str, object]]:
     cleaned = query.strip()[:200]
     if not cleaned:
@@ -220,9 +326,11 @@ def parser() -> argparse.ArgumentParser:
     root.add_argument("--db", type=Path, default=DEFAULT_DB)
     commands = root.add_subparsers(dest="command", required=True)
     commands.add_parser("init")
+    run = commands.add_parser("record-run"); run.add_argument("--run-id", required=True); run.add_argument("--repo", required=True); run.add_argument("--workflow", required=True); run.add_argument("--job", required=True); run.add_argument("--commit"); run.add_argument("--outcome", choices=RUN_OUTCOMES, required=True); run.add_argument("--duration-ms", type=int); run.add_argument("--runner")
     log = commands.add_parser("ingest-log"); log.add_argument("--run-id", required=True); log.add_argument("--repo", required=True); log.add_argument("file", type=Path)
     junit = commands.add_parser("ingest-junit"); junit.add_argument("--run-id", required=True); junit.add_argument("--repo", required=True); junit.add_argument("--attempt", type=int, default=1); junit.add_argument("file", type=Path)
     cache = commands.add_parser("cache"); cache.add_argument("--run-id", required=True); cache.add_argument("--kind", required=True); cache.add_argument("--key", required=True); cache.add_argument("--outcome", choices=("reused", "rebuilt", "downloaded", "evicted", "unknown"), required=True); cache.add_argument("--reason", required=True); cache.add_argument("--bytes", type=int)
+    manifest = commands.add_parser("manifest"); manifest.add_argument("--run-id", required=True); manifest.add_argument("--repo", required=True); manifest.add_argument("--workflow", required=True); manifest.add_argument("--job", required=True); manifest.add_argument("--command", dest="replay_command", required=True); manifest.add_argument("--commit", required=True); manifest.add_argument("--workdir", required=True); manifest.add_argument("--environment-fingerprint", required=True); manifest.add_argument("--lockfile-hash", required=True); manifest.add_argument("--service", action="append", default=[]); manifest.add_argument("--test-selection", default="")
     find = commands.add_parser("search"); find.add_argument("query"); find.add_argument("--limit", type=int, default=50)
     prune_command = commands.add_parser("prune"); prune_command.add_argument("--max-log-rows", type=int, default=50000); prune_command.add_argument("--max-test-rows", type=int, default=50000); prune_command.add_argument("--max-cache-rows", type=int, default=50000)
     commands.add_parser("doctor")
@@ -235,12 +343,18 @@ def main(argv: list[str] | None = None) -> int:
     init(db)
     if args.command == "init":
         print(json.dumps({"status": "initialized", "db": str(args.db)}))
+    elif args.command == "record-run":
+        record_run(db, args.run_id, args.repo, args.workflow, args.job, args.commit, args.outcome, args.duration_ms, args.runner)
+        print(json.dumps({"status": "recorded", "run_id": args.run_id}))
     elif args.command == "ingest-log":
         print(json.dumps({"ingested_lines": ingest_log(db, args.run_id, args.repo, args.file)}))
     elif args.command == "ingest-junit":
         print(json.dumps({"ingested_tests": ingest_junit(db, args.run_id, args.repo, args.file, args.attempt)}))
     elif args.command == "cache":
         record_cache(db, args.run_id, args.kind, args.key, args.outcome, args.reason, args.bytes); print(json.dumps({"status": "recorded"}))
+    elif args.command == "manifest":
+        record_manifest(db, run_id=args.run_id, repository=args.repo, workflow=args.workflow, job=args.job, commit_sha=args.commit, command=args.replay_command, workdir=args.workdir, environment_fingerprint=args.environment_fingerprint, lockfile_hash=args.lockfile_hash, services=tuple(args.service), test_selection=args.test_selection)
+        print(json.dumps({"status": "recorded", "run_id": args.run_id}))
     elif args.command == "search":
         print(json.dumps(search(db, args.query, max(1, min(args.limit, 500)))))
     elif args.command == "prune":

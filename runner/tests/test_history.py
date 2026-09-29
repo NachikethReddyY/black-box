@@ -56,6 +56,55 @@ class HistoryTests(unittest.TestCase):
             self.assertEqual(db.execute("SELECT COUNT(*) FROM logs").fetchone()[0], 1)
             self.assertEqual(db.execute("SELECT COUNT(*) FROM logs_fts").fetchone()[0], 1)
 
+    def test_execution_manifest_is_bounded_and_excludes_secrets(self):
+        with tempfile.TemporaryDirectory() as folder:
+            db = history.connect(Path(folder) / "history.sqlite3")
+            history.init(db)
+            history.record_manifest(
+                db,
+                run_id="run-4",
+                repository="acme/app",
+                workflow="CI",
+                job="test",
+                commit_sha="a" * 40,
+                command="pnpm test -- --runInBand",
+                workdir="/home/vbook/project",
+                environment_fingerprint="b" * 64,
+                lockfile_hash="c" * 64,
+                services=("postgres@sha256:deadbeef",),
+                test_selection="tests/auth.test.ts",
+            )
+            row = db.execute("SELECT manifest_json FROM execution_manifests WHERE run_id='run-4'").fetchone()
+            payload = json.loads(row[0])
+            self.assertEqual(payload["commit_sha"], "a" * 40)
+            self.assertEqual(payload["services"], ["postgres@sha256:deadbeef"])
+            self.assertNotIn("token", json.dumps(payload).lower())
+
+            with self.assertRaises(ValueError):
+                history.record_manifest(
+                    db,
+                    run_id="run-5",
+                    repository="acme/app",
+                    workflow="CI",
+                    job="test",
+                    commit_sha="a" * 40,
+                    command="echo TOKEN=secret",
+                    workdir="/home/vbook/project",
+                    environment_fingerprint="b" * 64,
+                    lockfile_hash="c" * 64,
+                    services=(),
+                    test_selection="",
+                )
+
+    def test_run_timing_record_is_upserted_without_losing_identity(self):
+        with tempfile.TemporaryDirectory() as folder:
+            db = history.connect(Path(folder) / "history.sqlite3")
+            history.init(db)
+            history.record_run(db, "run-6", "acme/app", "CI", "test", "d" * 40, "passed", 1250, "black-box-vbook")
+            history.record_run(db, "run-6", "acme/app", "CI", "test", "d" * 40, "failed", 1800, "black-box-vbook")
+            row = db.execute("SELECT repository,workflow,job,commit_sha,outcome,duration_ms,runner FROM runs WHERE run_id='run-6'").fetchone()
+            self.assertEqual(tuple(row), ("acme/app", "CI", "test", "d" * 40, "failed", 1800, "black-box-vbook"))
+
 
 if __name__ == "__main__":
     unittest.main()

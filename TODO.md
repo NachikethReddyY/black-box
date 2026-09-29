@@ -56,7 +56,8 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [x] Add cache explanations with explicit `reused`, `rebuilt`, `downloaded`, `evicted`, or `unknown` reasons and bounded retention.
 - [x] Add a bounded managed-cache policy with stable builder identities, BuildKit storage limits, package-store inventory, and redacted environment fingerprints. Live BuildKit preparation remains a WSL acceptance gate.
 - [x] Add JUnit ingestion with stable test identities, attempts, durations, and failure signatures.
-- [ ] Add execution manifests and `bb reproduce` only after a clean-workspace boundary is available.
+- [x] Add bounded execution manifests that exclude secrets. A future `bb reproduce` command still depends on a clean-workspace boundary.
 - [x] Add a read-only runner doctor and retain startup cleanup checks. WSL resource admission and draining mode still need live runner integration.
+- [x] Add bounded run timing records for future step and workflow comparisons. Live runner event ingestion remains pending.
 - [ ] Add evidence-backed PR summaries and diagnostic actions before AI suggestions.
 - [ ] Add reviewed AI explanations and patches only after logs, diffs, and test reports are redacted and bounded.

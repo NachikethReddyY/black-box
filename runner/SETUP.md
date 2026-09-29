@@ -155,9 +155,11 @@ Initialize the store, then ingest reports from a completed job:
 
 ```bash
 python3 runner/scripts/history.py init
+python3 runner/scripts/history.py record-run --run-id <run-id> --repo <owner/repo> --workflow CI --job test --commit <40-char-sha> --outcome passed --duration-ms 1250 --runner black-box-vbook
 python3 runner/scripts/history.py ingest-log --run-id <run-id> --repo <owner/repo> /path/to/job.log
 python3 runner/scripts/history.py ingest-junit --run-id <run-id> --repo <owner/repo> --attempt 1 /path/to/junit.xml
 python3 runner/scripts/history.py cache --run-id <run-id> --kind docker --key <image-lineage> --outcome reused --reason 'unchanged Dockerfile'
+python3 runner/scripts/history.py manifest --run-id <run-id> --repo <owner/repo> --workflow CI --job test --commit <40-char-sha> --command 'pnpm test' --workdir "$PWD" --environment-fingerprint <64-char-sha256> --lockfile-hash <64-char-sha256> --service 'postgres@sha256:<digest>' --test-selection 'tests/auth.test.ts'
 python3 runner/scripts/history.py search 'Connection refused'
 python3 runner/scripts/history.py doctor
 ```
@@ -169,6 +171,8 @@ python3 runner/scripts/history.py prune --max-log-rows 50000 --max-test-rows 500
 ```
 
 The importer redacts common GitHub tokens and bearer values, truncates each log at 2 MiB, and keeps test attempts separate. Redaction reduces exposure; it is not proof that arbitrary output contains no secret. Do not copy the SQLite database into the repository or attach it to a public issue.
+
+An execution manifest is a replay description, not a copied runner environment. It records the tested revision, command, workspace, lockfile and environment fingerprints, service-image references, and test selection. It rejects secret-like assignments and never stores environment variables, credentials, or temporary files. A future `bb reproduce` command can use it to create a clean workspace; this version only records the evidence.
 
 ## 9. Inspect a managed cache policy
 
