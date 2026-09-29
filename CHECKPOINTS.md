@@ -20,4 +20,5 @@ This file records publication checkpoints. It contains no credentials.
 - Cloudflare D1 migration `0001_dispatch.sql` applied successfully to `blackbox-dispatcher`.
 - Worker deployed at `https://blackbox-worker-dispatcher.ynrdevs.workers.dev` after local validation.
 - A live method probe returned `405 method_not_allowed`; D1 request count remained zero.
+- The unauthenticated POST boundary returns `401 invalid_signature` until the webhook secret is installed.
 - Real webhook acceptance remains disabled until owner-controlled Cloudflare secrets and GitHub App installation are supplied.

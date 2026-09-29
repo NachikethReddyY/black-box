@@ -16,7 +16,7 @@ export async function handleWebhook(request: Request, env: WorkerEnv, store = ne
   if (request.method !== 'POST') return json({error:'method_not_allowed'},405);
   let raw: string;
   try { raw = await bodyText(request); } catch { return json({error:'payload_too_large'},413); }
-  if (!(await verifyGitHubSignature(raw,request.headers.get('x-hub-signature-256'),env.WEBHOOK_SECRET))) return json({error:'invalid_signature'},401);
+  if (!(await verifyGitHubSignature(raw,request.headers.get('x-hub-signature-256'),env.WEBHOOK_SECRET ?? ''))) return json({error:'invalid_signature'},401);
   const eventId = request.headers.get('x-github-delivery');
   if (!eventId || !/^[\w-]{1,100}$/.test(eventId)) return json({error:'invalid_delivery_id'},400);
   let body: Record<string,unknown> | null;
