@@ -27,6 +27,7 @@ fi
 stub="$(mktemp -d "${HOME}/.black-box-test.XXXXXX")"
 trap 'rm -rf "$stub"' EXIT
 mkdir -p "$stub/actions-runner" "$stub/black-box-runner/state/transient" "$stub/black-box-runner/cache" "$stub/black-box-runner/work"
+: >"$stub/path-probe"
 cat > "$stub/actions-runner/run.sh" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$PATH" >"$PATH_PROBE"

@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import type { ReviewConfig, ReviewProfile } from './types.js';
 
@@ -20,7 +21,7 @@ export function parseDotEnv(text: string): Record<string, string> {
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): ReviewConfig {
   const profile = (env.REVIEWER_PROFILE ?? 'static_only') as ReviewProfile;
   if (!profiles.has(profile)) throw new Error(`unsupported REVIEWER_PROFILE: ${profile}`);
-  const root = resolve(env.REVIEWER_ROOT ?? cwd);
+  const root = resolve(env.REVIEWER_ROOT ?? discoverRepositoryRoot(cwd));
   const dataDir = resolve(env.REVIEWER_DATA_DIR ?? `${root}/reviewer/data`);
   const maxAttempts = integer(env.REVIEWER_MAX_ATTEMPTS, 4);
   if (maxAttempts < 1 || maxAttempts > 4) throw new Error('REVIEWER_MAX_ATTEMPTS must be between 1 and 4');
@@ -40,6 +41,18 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env, cwd = proces
     tokenRouterApiKey: env.TOKENROUTER_API_KEY?.trim() || undefined,
     githubToken: env.GITHUB_TOKEN?.trim() || undefined,
   };
+}
+
+function discoverRepositoryRoot(cwd: string): string {
+  try {
+    return execFileSync('git', ['-C', cwd, 'rev-parse', '--show-toplevel'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0' },
+    }).trim() || cwd;
+  } catch {
+    return cwd;
+  }
 }
 
 function integer(value: string | undefined, fallback: number): number {

@@ -82,9 +82,11 @@ export class ReviewStore {
     const attemptId = `${reviewId}:${requestId}`;
     this.#db.exec('BEGIN IMMEDIATE');
     try {
-      const row = this.#db.prepare('SELECT used_attempts, lease_generation, max_attempts FROM reservations WHERE review_id = ?').get(reviewId) as { used_attempts: number; lease_generation: number; max_attempts: number } | undefined;
+      const row = this.#db.prepare('SELECT used_attempts, used_cost_cents, lease_generation, max_attempts, max_cost_cents FROM reservations WHERE review_id = ?').get(reviewId) as { used_attempts: number; used_cost_cents: number; lease_generation: number; max_attempts: number; max_cost_cents: number } | undefined;
       if (!row || row.used_attempts >= row.max_attempts) throw new Error('provider attempt exceeds reservation');
-      this.#db.prepare('INSERT OR IGNORE INTO attempts (attempt_id, review_id, role, request_id, status, input_tokens, output_tokens, cost_cents, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(attemptId, reviewId, role, requestId, status, inputTokens, outputTokens, costCents, new Date().toISOString());
+      if (this.#db.prepare('SELECT 1 FROM attempts WHERE attempt_id = ?').get(attemptId)) { this.#db.exec('COMMIT'); return; }
+      if (row.used_cost_cents + costCents > row.max_cost_cents) throw new Error('provider attempt exceeds cost reservation');
+      this.#db.prepare('INSERT INTO attempts (attempt_id, review_id, role, request_id, status, input_tokens, output_tokens, cost_cents, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(attemptId, reviewId, role, requestId, status, inputTokens, outputTokens, costCents, new Date().toISOString());
       this.#db.prepare('UPDATE reservations SET used_attempts = used_attempts + 1, used_cost_cents = used_cost_cents + ? WHERE review_id = ? AND lease_generation = ?').run(costCents, reviewId, row.lease_generation);
       this.#db.exec('COMMIT');
     } catch (error) {
@@ -92,6 +94,8 @@ export class ReviewStore {
       throw error;
     }
   }
+
+  checkpoint(): void { this.#db.exec('PRAGMA wal_checkpoint(FULL)'); }
 
   saveResult(result: ReviewResult): void {
     this.#db.prepare('INSERT OR REPLACE INTO reviews (review_id, snapshot_id, profile, outcome, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(result.reviewId, result.snapshot.id, result.profile, result.outcome, JSON.stringify(result), new Date().toISOString());

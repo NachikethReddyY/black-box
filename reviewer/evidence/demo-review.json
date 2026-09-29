@@ -1,0 +1,145 @@
+{
+  "reviewId": "review_1f9bb3026039662c2b80",
+  "snapshot": {
+    "id": "snap_6f63f335ba98cdd026d2",
+    "mode": "ref",
+    "root": "/var/folders/70/7bh5tfg12d1bv23tbn88zww40000gn/T/blackbox-reviewer-Awq39W",
+    "baseRef": "HEAD",
+    "headRef": "HEAD",
+    "headSha": "4b206aad594b858ff5349ebbe9437edc4df287ca",
+    "files": [
+      {
+        "path": "index.ts",
+        "sha256": "2ed50b54ffe4b41ddca7172862e92fdbe37ce728db7f08f12c2ff4ed8b03e259",
+        "bytes": 46,
+        "binary": false,
+        "content": "export function value(): number { return 1; }\n"
+      },
+      {
+        "path": "tests/index.test.ts",
+        "sha256": "9f17c09ed21050b731334749cd21e6fee05f99deeeb3a4644ac775a7a5ad1c74",
+        "bytes": 43,
+        "binary": false,
+        "content": "import { value } from \"../index\";\nvalue();\n"
+      }
+    ],
+    "changedPaths": [
+      "index.ts",
+      "tests/index.test.ts"
+    ],
+    "omittedPaths": [],
+    "manifestSha256": "ad712032c359c7fe7d7fc9cdc1bbcafdef3c1a030f286975f300752c8a2bf52f"
+  },
+  "profile": "economy_cloud_luna_v1",
+  "candidates": [
+    {
+      "candidateId": "seeded-bug",
+      "category": "correctness",
+      "severity": "high",
+      "title": "seeded behavior regression",
+      "trigger": "the fixture changes the return behavior",
+      "expected": "the existing caller contract remains true",
+      "actual": "the changed code violates the contract",
+      "impact": "the caller receives incorrect behavior",
+      "changeRelevance": "introduced",
+      "causalChangeRef": [
+        {
+          "path": "index.ts",
+          "sha256": "fixture",
+          "start": 1,
+          "end": 1,
+          "side": "RIGHT",
+          "reason": "seeded change"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "index.ts",
+          "sha256": "fixture",
+          "start": 1,
+          "end": 1,
+          "side": "RIGHT",
+          "reason": "seeded change"
+        }
+      ],
+      "verificationKind": "model_assessment",
+      "status": "candidate"
+    }
+  ],
+  "verifications": [
+    {
+      "candidateId": "seeded-bug",
+      "decision": "supported",
+      "evidenceChecked": [
+        "index.ts"
+      ],
+      "causalLink": "introduced",
+      "verificationKind": "model_assessment",
+      "reason": "fixture supports the seeded candidate",
+      "uncertainty": "fixture only"
+    }
+  ],
+  "findings": [
+    {
+      "findingId": "finding_d3df40078b748a75076e",
+      "occurrenceId": "occurrence_72b37ba78ac4832e25f5",
+      "evidenceVersion": "95a80b60bea2237bb2f8bc7a14f3b204bbafa72450604025962f4694afeb594c",
+      "candidate": {
+        "candidateId": "seeded-bug",
+        "category": "correctness",
+        "severity": "high",
+        "title": "seeded behavior regression",
+        "trigger": "the fixture changes the return behavior",
+        "expected": "the existing caller contract remains true",
+        "actual": "the changed code violates the contract",
+        "impact": "the caller receives incorrect behavior",
+        "changeRelevance": "introduced",
+        "causalChangeRef": [
+          {
+            "path": "index.ts",
+            "sha256": "fixture",
+            "start": 1,
+            "end": 1,
+            "side": "RIGHT",
+            "reason": "seeded change"
+          }
+        ],
+        "evidence": [
+          {
+            "path": "index.ts",
+            "sha256": "fixture",
+            "start": 1,
+            "end": 1,
+            "side": "RIGHT",
+            "reason": "seeded change"
+          }
+        ],
+        "verificationKind": "model_assessment",
+        "status": "candidate"
+      },
+      "verification": {
+        "candidateId": "seeded-bug",
+        "decision": "supported",
+        "evidenceChecked": [
+          "index.ts"
+        ],
+        "causalLink": "introduced",
+        "verificationKind": "model_assessment",
+        "reason": "fixture supports the seeded candidate",
+        "uncertainty": "fixture only"
+      }
+    }
+  ],
+  "secretFindings": [],
+  "coverage": {
+    "selectedPaths": [
+      "index.ts",
+      "tests/index.test.ts"
+    ],
+    "omittedPaths": [],
+    "complete": true
+  },
+  "attempts": 3,
+  "estimatedCostUsd": 0.00012,
+  "outcome": "completed_findings"
+}

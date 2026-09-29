@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { configFromEnv, parseDotEnv } from '../src/config.js';
 import { buildContext } from '../src/context.js';
 import { id } from '../src/hash.js';
-import { FakeProvider } from '../src/provider.js';
+import { FakeProvider, OPENAI_ROUTE, ResponsesProvider } from '../src/provider.js';
 import { runReview } from '../src/pipeline.js';
 import { reportMarkdown } from '../src/report.js';
 import { captureSnapshot } from '../src/snapshot.js';
@@ -14,6 +14,7 @@ import { ReviewStore } from '../src/store.js';
 import type { Candidate, ProviderResponse, ReviewConfig, ReviewId } from '../src/types.js';
 import { tempRepo, run } from './helpers.js';
 import { GitHubApi } from '../src/github.js';
+import { buildReviewPreview } from '../src/publisher.js';
 
 function config(root: string, extra: Partial<ReviewConfig> = {}): ReviewConfig {
   return { root, dataDir: mkdtempSync(join(tmpdir(), 'blackbox-reviewer-data-')), profile: 'static_only', maxAttempts: 4, maxInputTokens: 32_768, maxOutputTokens: 16_384, maxPacketBytes: 128 * 1024, maxInlineFindings: 5, cloudBudgetUsd: 0, ...extra };
@@ -68,18 +69,18 @@ test('static review persists an exact result and publication preview without a m
   store.close();
 });
 
-function candidate(): Candidate {
+function makeCandidate(): Candidate {
   return { candidateId: 'candidate-1', category: 'correctness', severity: 'high', title: 'returns the wrong value', trigger: 'the changed return path is selected', expected: 'the caller receives the stored value', actual: 'the caller receives a constant', impact: 'caller behavior is incorrect', changeRelevance: 'introduced', causalChangeRef: [{ path: 'index.ts', sha256: 'source', start: 1, end: 1, side: 'RIGHT', reason: 'changed return' }], evidence: [{ path: 'index.ts', sha256: 'source', start: 1, end: 1, side: 'RIGHT', reason: 'changed return' }], verificationKind: 'model_assessment', status: 'candidate' };
 }
 
 test('cloud pipeline uses two specialists and one verifier, then publishes only supported causal findings', async () => {
   const root = tempRepo();
-  const cfg = config(root, { profile: 'economy_cloud_luna_v1', cloudBudgetUsd: 0.03 });
+  const cfg = config(root, { profile: 'economy_cloud_luna_v1', cloudBudgetUsd: 0.10 });
   const snap = captureSnapshot(cfg, 'ref', 'HEAD');
   const built = buildContext(snap, cfg.maxPacketBytes);
   const responses: ProviderResponse[] = [
-    { candidates: [candidate()], inputTokens: 100, outputTokens: 100, rawStatus: 'ok' },
-    { candidates: [candidate()], inputTokens: 100, outputTokens: 100, rawStatus: 'ok' },
+    { candidates: [makeCandidate()], inputTokens: 100, outputTokens: 100, rawStatus: 'ok' },
+    { candidates: [makeCandidate()], inputTokens: 100, outputTokens: 100, rawStatus: 'ok' },
     { verifications: [{ candidateId: 'candidate-1', decision: 'supported', evidenceChecked: ['index.ts'], causalLink: 'introduced', verificationKind: 'model_assessment', reason: 'causal evidence matches changed code', uncertainty: 'no runtime reproduction' }], inputTokens: 100, outputTokens: 100, rawStatus: 'ok' },
   ];
   const provider = new FakeProvider(responses);
@@ -96,11 +97,11 @@ test('cloud pipeline uses two specialists and one verifier, then publishes only 
 
 test('verifier output cannot claim runtime proof or omit a candidate', async () => {
   const root = tempRepo();
-  const cfg = config(root, { profile: 'economy_cloud_luna_v1', cloudBudgetUsd: 0.03 });
+  const cfg = config(root, { profile: 'economy_cloud_luna_v1', cloudBudgetUsd: 0.10 });
   const snap = captureSnapshot(cfg, 'ref', 'HEAD');
   const built = buildContext(snap, cfg.maxPacketBytes);
   const invalid: ProviderResponse[] = [
-    { candidates: [candidate()], inputTokens: 1, outputTokens: 1, rawStatus: 'ok' },
+    { candidates: [makeCandidate()], inputTokens: 1, outputTokens: 1, rawStatus: 'ok' },
     { candidates: [], inputTokens: 1, outputTokens: 1, rawStatus: 'ok' },
     { verifications: [], inputTokens: 1, outputTokens: 1, rawStatus: 'ok' },
   ];
@@ -115,6 +116,13 @@ test('config defaults to static-only even when API keys exist', () => {
   const cfg = configFromEnv({ LUNA_API_KEY: 'present', SPAN_API_KEY: 'present' }, '/tmp');
   assert.equal(cfg.profile, 'static_only');
   assert.equal(cfg.cloudBudgetUsd, 0);
+});
+
+test('config discovers the enclosing worktree when invoked from the reviewer package', () => {
+  const root = tempRepo();
+  mkdirSync(join(root, 'reviewer'), { recursive: true });
+  const cfg = configFromEnv({}, join(root, 'reviewer'));
+  assert.equal(cfg.root, realpathSync(root));
 });
 
 test('GitHub adapter validates PR metadata and paginates files through an injected transport', async () => {
@@ -134,4 +142,36 @@ test('GitHub adapter validates PR metadata and paginates files through an inject
   assert.equal(files[0]?.path, 'index.ts');
   assert.equal(requests.length, 2);
   assert.ok(requests.every((url) => url.startsWith('https://github.test/')));
+});
+
+test('publisher preview keeps exact reviewed head and changed-line anchors', () => {
+  const root = tempRepo();
+  const cfg = config(root);
+  const snapshot = captureSnapshot(cfg, 'ref', 'HEAD');
+  const findingCandidate = { ...makeCandidate(), evidence: [{ path: 'index.ts', sha256: 'source', start: 1, end: 1, side: 'RIGHT' as const, reason: 'changed line' }], causalChangeRef: [{ path: 'index.ts', sha256: 'source', start: 1, end: 1, side: 'RIGHT' as const, reason: 'changed line' }] };
+  const verification = { candidateId: findingCandidate.candidateId, decision: 'supported' as const, evidenceChecked: ['index.ts'], causalLink: 'introduced' as const, verificationKind: 'model_assessment' as const, reason: 'supported', uncertainty: '' };
+  const result = { reviewId: id('review', 'publisher') as ReviewId, snapshot: { ...snapshot, changedPaths: ['index.ts'], headSha: 'head-sha' }, profile: 'static_only' as const, outcome: 'completed_findings' as const, candidates: [findingCandidate], verifications: [verification], findings: [{ findingId: id('finding', 'publisher') as never, occurrenceId: 'occurrence', evidenceVersion: 'version', candidate: findingCandidate, verification }], secretFindings: [], coverage: { selectedPaths: ['index.ts'], omittedPaths: [], complete: true }, attempts: 3, estimatedCostUsd: 0.01 };
+  const preview = buildReviewPreview(result);
+  assert.equal(preview.commit_id, 'head-sha');
+  assert.equal(preview.event, 'COMMENT');
+  assert.equal(preview.comments[0]?.path, 'index.ts');
+  assert.equal(preview.comments[0]?.line, 1);
+});
+
+test('Responses adapter sends the configured medium reasoning route without tools or hidden retries', async () => {
+  const root = tempRepo();
+  const cfg = config(root);
+  const snapshot = captureSnapshot(cfg, 'ref', 'HEAD');
+  const packet = buildContext(snapshot, cfg.maxPacketBytes).packet;
+  let body: Record<string, unknown> | undefined;
+  const fetcher: typeof fetch = async (_input, init) => {
+    body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return new Response(JSON.stringify({ output_text: JSON.stringify({ candidates: [] }), usage: { input_tokens: 12, output_tokens: 4 } }), { status: 200 });
+  };
+  const provider = new ResponsesProvider(OPENAI_ROUTE, 'test-key', fetcher);
+  const response = await provider.review({ role: 'correctness', snapshotId: snapshot.id, packet, requestId: 'attempt-1' });
+  assert.equal(response.candidates?.length, 0);
+  assert.deepEqual(body?.reasoning, { effort: 'medium' });
+  assert.equal(body?.model, 'gpt-6-luna');
+  assert.equal((body?.tools as unknown[] | undefined)?.length ?? 0, 0);
 });

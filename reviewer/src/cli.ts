@@ -7,6 +7,7 @@ import { runReview } from './pipeline.js';
 import { ReviewStore } from './store.js';
 import { writeReports } from './report.js';
 import { GitHubApi, type PullRequestRef } from './github.js';
+import { buildReviewPreview } from './publisher.js';
 import type { SnapshotMode } from './types.js';
 
 loadDotEnv();
@@ -24,8 +25,9 @@ else if (command === 'help') printHelp();
 else { console.error(`unknown command: ${command}`); process.exitCode = 2; }
 
 function loadDotEnv(): void {
-  const path = process.env.REVIEWER_ENV_FILE ?? `${process.cwd()}/.env`;
-  if (!existsSync(path)) return;
+  const candidates = process.env.REVIEWER_ENV_FILE ? [process.env.REVIEWER_ENV_FILE] : [`${process.cwd()}/.env`, `${process.cwd()}/../.env`];
+  const path = candidates.find((candidate) => candidate && existsSync(candidate));
+  if (!path) return;
   const parsed = parseDotEnv(readFileSync(path, 'utf8'));
   for (const [key, value] of Object.entries(parsed)) if (process.env[key] === undefined) process.env[key] = value;
 }
@@ -47,6 +49,7 @@ function backup(): void {
   const destination = cliArgs[1] ?? `${config.dataDir}/backup-${new Date().toISOString().replaceAll(':', '-')}`;
   mkdirSync(destination, { recursive: true });
   const store = new ReviewStore(config);
+  store.checkpoint();
   const database = `${destination}/reviewer.sqlite`;
   copyFileSync(store.dbPath, database);
   const manifest = { createdAt: new Date().toISOString(), integrity: store.integrityCheck(), databaseBytes: statSync(database).size };
@@ -100,7 +103,6 @@ async function prPreview(): Promise<void> {
   const number = Number(numberText);
   if (!owner || !repo || !Number.isSafeInteger(number) || number < 1) throw new Error('usage: reviewer pr-preview OWNER REPO NUMBER');
   const config = configFromEnv();
-  if (!config.githubToken) throw new Error('GITHUB_TOKEN is required for PR preview');
   const api = new GitHubApi(config.githubToken);
   const ref: PullRequestRef = { owner, repo, number };
   const snapshot = await api.capturePullRequestSnapshot(ref);
@@ -109,7 +111,7 @@ async function prPreview(): Promise<void> {
   const provider = providerFor(config);
   const result = await runReview(config, snapshot, packet, store, { provider, authorizeCloud: process.env.REVIEWER_AUTHORIZE_CLOUD === 'true' });
   const reports = writeReports(result, `${config.dataDir}/${result.reviewId}`);
-  const preview = api.previewReview(ref, { commit_id: snapshot.headSha ?? '', event: 'COMMENT', body: `<!-- preview only -->\n${result.outcome}`, comments: [] });
+  const preview = api.previewReview(ref, buildReviewPreview(result));
   store.close();
   console.log(JSON.stringify({ repository: `${owner}/${repo}`, pullRequest: number, reviewId: result.reviewId, outcome: result.outcome, snapshotId: snapshot.id, files: snapshot.files.length, changedPaths: snapshot.changedPaths, report: reports, publication: { mode: 'preview', review: preview } }, null, 2));
 }

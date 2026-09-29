@@ -1,5 +1,5 @@
 import { id, sha256 } from './hash.js';
-import type { Candidate, ContextPacket, FindingOccurrence, ProviderAdapter, ReviewConfig, ReviewId, ReviewResult, Snapshot, Verification } from './types.js';
+import type { Candidate, ContextPacket, FindingOccurrence, ProviderAdapter, ProviderRequest, ProviderResponse, ReviewConfig, ReviewId, ReviewResult, Snapshot, Verification } from './types.js';
 import { ReviewStore } from './store.js';
 
 export interface RunOptions {
@@ -29,6 +29,11 @@ export async function runReview(config: ReviewConfig, snapshot: Snapshot, packet
   }
   const provider = options.provider;
   const maxCostCents = Math.ceil(config.maxInputTokens / 1_000_000 * provider.route.inputPricePerMillion * 100 + config.maxOutputTokens / 1_000_000 * provider.route.outputPricePerMillion * 100) * config.maxAttempts;
+  if (maxCostCents > Math.floor(config.cloudBudgetUsd * 100)) {
+    const result = { ...base, outcome: 'awaiting_budget' as const, error: `maximum reserved liability of ${maxCostCents} cents exceeds the configured cloud budget` };
+    store.saveResult(result);
+    return result;
+  }
   store.reserve(reviewId, config.maxAttempts, maxCostCents);
   let attempts = 0;
   let estimatedCostUsd = 0;
@@ -36,18 +41,15 @@ export async function runReview(config: ReviewConfig, snapshot: Snapshot, packet
   let verifications: Verification[] = [];
   try {
     for (const role of ['correctness', 'security'] as const) {
-      const response = await provider.review({ role, snapshotId: snapshot.id, packet, requestId: `${reviewId}:${role}:0` });
+      const response = await attempt(provider, store, reviewId, role, { role, snapshotId: snapshot.id, packet, requestId: `${reviewId}:${role}:0` }, maxCostCents / config.maxAttempts);
       attempts += 1;
       estimatedCostUsd += cost(response.inputTokens, response.outputTokens, provider);
-      store.recordAttempt(reviewId, role, `${role}:0`, response.rawStatus, response.inputTokens, response.outputTokens, Math.ceil(cost(response.inputTokens, response.outputTokens, provider) * 100));
       candidates.push(...(response.candidates ?? []));
     }
     candidates = dedupe(candidates);
     if (candidates.length > 0) {
-      const response = await provider.review({ role: 'verifier', snapshotId: snapshot.id, packet, candidates, requestId: `${reviewId}:verifier:0` });
+      const response = await attempt(provider, store, reviewId, 'verifier', { role: 'verifier', snapshotId: snapshot.id, packet, candidates, requestId: `${reviewId}:verifier:0` }, maxCostCents / config.maxAttempts);
       attempts += 1;
-      estimatedCostUsd += cost(response.inputTokens, response.outputTokens, provider);
-      store.recordAttempt(reviewId, 'verifier', 'verifier:0', response.rawStatus, response.inputTokens, response.outputTokens, Math.ceil(cost(response.inputTokens, response.outputTokens, provider) * 100));
       verifications = validateVerificationSet(candidates, response.verifications ?? []);
     }
     const findings = makeFindings(candidates, verifications, snapshot);
@@ -60,6 +62,21 @@ export async function runReview(config: ReviewConfig, snapshot: Snapshot, packet
     store.saveResult(result);
     return result;
   }
+}
+
+async function attempt(provider: ProviderAdapter, store: ReviewStore, reviewId: ReviewId, role: ProviderRequest['role'], request: ProviderRequest, maxAttemptCostCents: number): Promise<ProviderResponse> {
+  try {
+    const response = await provider.review(request);
+    store.recordAttempt(reviewId, role, request.requestId, response.rawStatus, response.inputTokens, response.outputTokens, Math.ceil(costFor(response.inputTokens, response.outputTokens, provider) * 100));
+    return response;
+  } catch (error) {
+    store.recordAttempt(reviewId, role, request.requestId, 'unknown', 0, 0, Math.ceil(maxAttemptCostCents));
+    throw error;
+  }
+}
+
+function costFor(inputTokens: number, outputTokens: number, provider: ProviderAdapter): number {
+  return inputTokens / 1_000_000 * provider.route.inputPricePerMillion + outputTokens / 1_000_000 * provider.route.outputPricePerMillion;
 }
 
 function dedupe(candidates: readonly Candidate[]): Candidate[] {

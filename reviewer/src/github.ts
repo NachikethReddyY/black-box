@@ -11,10 +11,10 @@ export interface GitHubClient {
 export interface ReviewPreview { readonly commit_id: string; readonly event: 'COMMENT'; readonly body: string; readonly comments: readonly { readonly path: string; readonly line: number; readonly side: 'RIGHT' | 'LEFT'; readonly body: string }[]; }
 
 export class GitHubApi implements GitHubClient {
-  readonly #token: string;
+  readonly #token?: string;
   readonly #fetch: typeof fetch;
   readonly #apiBase: string;
-  constructor(token: string, fetcher: typeof fetch = fetch, apiBase = 'https://api.github.com') { this.#token = token; this.#fetch = fetcher; this.#apiBase = apiBase.replace(/\/$/, ''); }
+  constructor(token: string | undefined, fetcher: typeof fetch = fetch, apiBase = 'https://api.github.com') { this.#token = token; this.#fetch = fetcher; this.#apiBase = apiBase.replace(/\/$/, ''); }
 
   async getPullRequest(ref: PullRequestRef): Promise<PullRequestSnapshot> {
     const row = record(await this.#request(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/pulls/${ref.number}`));
@@ -38,7 +38,15 @@ export class GitHubApi implements GitHubClient {
   async capturePullRequestSnapshot(ref: PullRequestRef): Promise<Snapshot> {
     const pr = await this.getPullRequest(ref);
     const fileList = await this.listPullRequestFiles(ref);
-    const response = await this.#fetch(`${this.#apiBase}/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/tarball/${encodeURIComponent(pr.headSha)}`, { headers: { accept: 'application/vnd.github+json', authorization: `Bearer ${this.#token}`, 'user-agent': 'Black-Box-Reviewer' }, signal: AbortSignal.timeout(60_000), redirect: 'error' });
+    const archiveUrl = `${this.#apiBase}/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/tarball/${encodeURIComponent(pr.headSha)}`;
+    let response = await this.#fetch(archiveUrl, { headers: { accept: 'application/vnd.github+json', ...(this.#token ? { authorization: `Bearer ${this.#token}` } : {}), 'user-agent': 'Black-Box-Reviewer' }, signal: AbortSignal.timeout(60_000), redirect: 'manual' });
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      if (!location) throw new Error('GitHub archive redirect had no location');
+      const redirected = new URL(location);
+      if (redirected.hostname !== 'codeload.github.com' && redirected.hostname !== 'github.com') throw new Error(`GitHub archive redirect target is not allowlisted: ${redirected.hostname}`);
+      response = await this.#fetch(redirected, { headers: { accept: 'application/octet-stream', 'user-agent': 'Black-Box-Reviewer' }, signal: AbortSignal.timeout(60_000), redirect: 'error' });
+    }
     if (!response.ok) throw new Error(`GitHub archive returned HTTP ${response.status}`);
     const compressed = Buffer.from(await response.arrayBuffer());
     if (compressed.length > 128 * 1024 * 1024) throw new Error('GitHub archive exceeds 128 MiB safety limit');
@@ -50,7 +58,7 @@ export class GitHubApi implements GitHubClient {
   }
 
   async #request(path: string): Promise<unknown> {
-    const response = await this.#fetch(`${this.#apiBase}${path}`, { headers: { accept: 'application/vnd.github+json', authorization: `Bearer ${this.#token}`, 'x-github-api-version': '2022-11-28', 'user-agent': 'Black-Box-Reviewer' }, signal: AbortSignal.timeout(30_000) });
+    const response = await this.#fetch(`${this.#apiBase}${path}`, { headers: { accept: 'application/vnd.github+json', ...(this.#token ? { authorization: `Bearer ${this.#token}` } : {}), 'x-github-api-version': '2022-11-28', 'user-agent': 'Black-Box-Reviewer' }, signal: AbortSignal.timeout(30_000) });
     const value: unknown = await response.json();
     if (!response.ok) throw new Error(`GitHub API returned HTTP ${response.status}`);
     return value;
@@ -78,7 +86,7 @@ function parseTar(buffer: Buffer): SourceFile[] {
         const binary = bytes.subarray(0, Math.min(bytes.length, 8_192)).includes(0);
         files.push({ path: relativePath, sha256: sha256(bytes), bytes: bytes.length, binary, content: binary ? '' : bytes.toString('utf8') });
       }
-    } else if (type !== 5 && type !== 50) {
+    } else if (type !== 5 && type !== 50 && type !== 53 && type !== 103 && type !== 120 && type !== 76 && type !== 75) {
       throw new Error(`GitHub archive contains unsupported entry type for ${path}`);
     }
     offset = bodyStart + Math.ceil(size / 512) * 512;

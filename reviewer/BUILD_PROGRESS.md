@@ -12,15 +12,17 @@
 - [x] Implemented direct Responses and TokenRouter route contracts with strict response validation.
 - [x] Implemented two-specialist, verifier, dedupe, finding identity, and cost accounting pipeline.
 - [x] Implemented GitHub PR metadata/file/archive reads and preview-only review rendering.
-- [x] Added seven passing unit/fixture tests and a static CLI run against this checkout.
+- [x] Added eleven passing unit/fixture tests and a static CLI run against this checkout.
+- [x] Added doctor, status, backup/restore, export, and help commands.
+- [x] Added injected GitHub transport coverage and changed-line publication-preview coverage.
+- [x] Added an offline labelled smoke evaluation with clean and seeded-bug controls.
+- [x] Ran Worker, dashboard, project, and runner regression checks.
+- [x] Ran one public pull-request preview against `psf/requests#7628` without a model call or GitHub write.
 
-## Remaining in this build
+## Verification limits recorded
 
-- [ ] Add doctor/status, backup/restore, export, and cleanup commands.
-- [ ] Add GitHub adapter and publication-preview fixture coverage.
-- [ ] Add fault-injection and acceptance fixture report generation.
-- [ ] Add a small labelled offline evaluation corpus and demo reports.
-- [ ] Run the existing Worker and dashboard regression suites.
-- [ ] Verify OrbStack connectivity if available without host changes.
-- [ ] Run live model or GitHub publication checks only if an existing numeric authorization is present; otherwise record `live_not_run`.
-- [ ] Write `BUILD_REPORT.md` and create the requested draft PR after the implementation is verified.
+- [x] Recorded that live model calls were not run because the supplied keys are not a numeric spending authorization.
+- [x] Recorded that GitHub publication was not run; the adapter remains preview-only.
+- [x] Recorded that OrbStack/WSL2 deployment could not be verified from this host because the advertised VM address was unreachable.
+- [x] Wrote `BUILD_REPORT.md` with exact commands, results, and remaining limitations.
+- [ ] Create and link the requested draft PR after the final checkpoint commit.

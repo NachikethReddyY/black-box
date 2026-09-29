@@ -14,7 +14,8 @@
     "status": "tsx src/cli.ts status",
     "backup": "tsx src/cli.ts backup",
     "restore": "tsx src/cli.ts restore",
-    "export": "tsx src/cli.ts export"
+    "export": "tsx src/cli.ts export",
+    "evaluate": "tsx scripts/evaluate.ts"
   },
   "dependencies": {
     "typescript": "^5.9.2"

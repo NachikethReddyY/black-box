@@ -20,7 +20,9 @@ pnpm typecheck
 
 The default profile is `static_only`. It performs snapshot capture, local secret scanning, TypeScript context extraction, and deterministic reports without cloud calls. Cloud review requires an explicit `REVIEWER_PROFILE`, a positive `REVIEWER_CLOUD_BUDGET_USD`, and `REVIEWER_AUTHORIZE_CLOUD=true`. Publication remains preview-only.
 
-Supported profiles are `economy_cloud_luna_v1` for the direct OpenAI Responses API and `economy_cloud_tokenrouter_luna_v1` for an explicitly configured TokenRouter endpoint. Provider keys are read from protected environment configuration. The CLI never prints them.
+Run the commands from either the repository root with `pnpm --dir reviewer ...` or from `reviewer/` with `pnpm ...`. The CLI discovers the enclosing Git worktree by default. Set `REVIEWER_ROOT` when the repository is elsewhere and `REVIEWER_ENV_FILE` when credentials live outside the default `.env` locations.
+
+Supported profiles are `economy_cloud_luna_v1` for the direct OpenAI Responses API and `economy_cloud_tokenrouter_luna_v1` for an explicitly configured TokenRouter endpoint. Provider keys are read from protected environment configuration. The CLI never prints them. Public PR metadata and archive reads can run without `GITHUB_TOKEN`; private repositories and any future publication require a configured credential.
 
 ## Evidence and limits
 

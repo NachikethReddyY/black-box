@@ -1,0 +1,23 @@
+{
+  "generatedAt": "2026-09-29T16:07:35.181Z",
+  "cases": [
+    {
+      "name": "clean",
+      "outcome": "completed_clean",
+      "attempts": 2,
+      "findings": 0,
+      "estimatedCostUsd": 0.00012
+    },
+    {
+      "name": "bug",
+      "outcome": "completed_findings",
+      "attempts": 3,
+      "findings": 1,
+      "estimatedCostUsd": 0.00012
+    }
+  ],
+  "limitations": [
+    "Provider responses are controlled fixtures. This proves orchestration and accounting, not live model precision or recall.",
+    "No GitHub publication or cloud request was performed."
+  ]
+}
