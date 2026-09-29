@@ -15,6 +15,7 @@ import type { Candidate, ProviderResponse, ReviewConfig, ReviewId } from '../src
 import { tempRepo, run } from './helpers.js';
 import { GitHubApi } from '../src/github.js';
 import { buildReviewPreview } from '../src/publisher.js';
+import { listenStatusServer } from '../src/status-server.js';
 
 function config(root: string, extra: Partial<ReviewConfig> = {}): ReviewConfig {
   return { root, dataDir: mkdtempSync(join(tmpdir(), 'blackbox-reviewer-data-')), profile: 'static_only', maxAttempts: 4, maxInputTokens: 32_768, maxOutputTokens: 16_384, maxPacketBytes: 128 * 1024, maxInlineFindings: 5, cloudBudgetUsd: 0, ...extra };
@@ -123,6 +124,22 @@ test('config discovers the enclosing worktree when invoked from the reviewer pac
   mkdirSync(join(root, 'reviewer'), { recursive: true });
   const cfg = configFromEnv({}, join(root, 'reviewer'));
   assert.equal(cfg.root, realpathSync(root));
+});
+
+test('local status server is loopback-only and bearer-token protected', async () => {
+  const handle = await listenStatusServer(config(tempRepo()), 'status-token');
+  try {
+    const health = await fetch(`http://127.0.0.1:${handle.port}/healthz`);
+    assert.equal(health.status, 200);
+    assert.deepEqual(await health.json(), { ok: true });
+    const denied = await fetch(`http://127.0.0.1:${handle.port}/status`);
+    assert.equal(denied.status, 401);
+    const allowed = await fetch(`http://127.0.0.1:${handle.port}/status`, { headers: { authorization: 'Bearer status-token' } });
+    assert.equal(allowed.status, 200);
+    assert.equal((await allowed.json() as { integrity: string }).integrity, 'ok');
+  } finally {
+    await handle.close();
+  }
 });
 
 test('GitHub adapter validates PR metadata and paginates files through an injected transport', async () => {

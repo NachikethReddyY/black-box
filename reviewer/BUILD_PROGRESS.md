@@ -12,7 +12,8 @@
 - [x] Implemented direct Responses and TokenRouter route contracts with strict response validation.
 - [x] Implemented two-specialist, verifier, dedupe, finding identity, and cost accounting pipeline.
 - [x] Implemented GitHub PR metadata/file/archive reads and preview-only review rendering.
-- [x] Added eleven passing unit/fixture tests and a static CLI run against this checkout.
+- [x] Added twelve passing unit/fixture tests and a static CLI run against this checkout.
+- [x] Added a loopback-only bearer-token status service and WSL2 systemd example.
 - [x] Added doctor, status, backup/restore, export, and help commands.
 - [x] Added injected GitHub transport coverage and changed-line publication-preview coverage.
 - [x] Added an offline labelled smoke evaluation with clean and seeded-bug controls.

@@ -8,6 +8,7 @@ import { ReviewStore } from './store.js';
 import { writeReports } from './report.js';
 import { GitHubApi, type PullRequestRef } from './github.js';
 import { buildReviewPreview } from './publisher.js';
+import { listenStatusServer } from './status-server.js';
 import type { SnapshotMode } from './types.js';
 
 loadDotEnv();
@@ -21,6 +22,7 @@ else if (command === 'status') status();
 else if (command === 'backup') backup();
 else if (command === 'restore') restore();
 else if (command === 'export') exportReview();
+else if (command === 'serve') await serve();
 else if (command === 'help') printHelp();
 else { console.error(`unknown command: ${command}`); process.exitCode = 2; }
 
@@ -83,6 +85,21 @@ function exportReview(): void {
   console.log(JSON.stringify({ reviewId, reports }, null, 2));
 }
 
+async function serve(): Promise<void> {
+  const config = configFromEnv();
+  const token = process.env.REVIEWER_STATUS_TOKEN?.trim();
+  if (!token) throw new Error('REVIEWER_STATUS_TOKEN is required for the local status service');
+  const port = Number(process.env.REVIEWER_STATUS_PORT ?? 8787);
+  if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) throw new Error('REVIEWER_STATUS_PORT must be between 1 and 65535');
+  const handle = await listenStatusServer(config, token, port);
+  console.log(JSON.stringify({ host: '127.0.0.1', port: handle.port, endpoints: ['/healthz', '/status'], stop: 'SIGINT or SIGTERM' }, null, 2));
+  await new Promise<void>((resolve, reject) => {
+    const stop = (): void => { void handle.close().then(resolve, reject); };
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
+  });
+}
+
 async function review(): Promise<void> {
   const mode = parseMode(cliArgs[1] ?? 'working_tree');
   const config = configFromEnv();
@@ -131,5 +148,5 @@ function parseMode(value: string): SnapshotMode {
 }
 
 function printHelp(): void {
-  console.log('reviewer doctor\nreviewer review [working_tree|staged|ref] [ref]\nreviewer pr-preview OWNER REPO NUMBER\nreviewer status\nreviewer backup [DIRECTORY]\nreviewer restore DATABASE\nreviewer export REVIEW_ID\n\nDefault profile is static_only. Cloud review requires explicit REVIEWER_AUTHORIZE_CLOUD=true and a positive REVIEWER_CLOUD_BUDGET_USD.');
+  console.log('reviewer doctor\nreviewer review [working_tree|staged|ref] [ref]\nreviewer pr-preview OWNER REPO NUMBER\nreviewer status\nreviewer serve\nreviewer backup [DIRECTORY]\nreviewer restore DATABASE\nreviewer export REVIEW_ID\n\nDefault profile is static_only. Cloud review requires explicit REVIEWER_AUTHORIZE_CLOUD=true and a positive REVIEWER_CLOUD_BUDGET_USD.');
 }

@@ -21,6 +21,7 @@ The default profile is local and static. GitHub publication, PR-body mutation, r
 - Correctness specialist, security specialist, candidate deduplication, skeptical verifier, causal-change checks, persistent finding IDs, and revision-bound occurrences.
 - GitHub metadata, file list, archive capture, safe redirect handling, injected transport tests, and preview-only review rendering.
 - CLI commands: `doctor`, `review`, `pr-preview`, `status`, `backup`, `restore`, `export`, and `help`.
+- Loopback-only authenticated status service via `serve`, with a WSL2 systemd example.
 - Offline clean-control and seeded-bug evaluation reports under `reviewer/evidence/`.
 
 ## Exact verification
@@ -28,7 +29,7 @@ The default profile is local and static. GitHub publication, PR-body mutation, r
 | Check | Result | Evidence |
 |---|---|---|
 | Reviewer typecheck | Passed | `cd reviewer && pnpm typecheck` |
-| Reviewer tests | Passed, 11 tests | `cd reviewer && pnpm test` |
+| Reviewer tests | Passed, 12 tests | `cd reviewer && pnpm test` |
 | CLI lifecycle | Passed: review, status, export, backup, restore | `reviewer` commands with temporary data directories |
 | Offline smoke evaluation | Passed: clean control stayed clean and seeded bug was retained after verification | `cd reviewer && pnpm run evaluate` |
 | Public PR snapshot | Passed: `psf/requests#7628`, 128 files, exact head captured | `reviewer/evidence/public-pr-preview.json` |
@@ -59,6 +60,20 @@ The package is designed for the Windows PC's WSL2 Linux filesystem. The OrbStack
 - T-22, feedback learning, knowledge-base lifecycle, runtime sandbox execution, and scheduled/automatic agents remain P2/P3 work.
 - The existing Windows/WSL2 host still needs a direct deployment run when it is available.
 - Invoking the CLI from `reviewer/` discovers the enclosing Git worktree; `REVIEWER_ROOT` remains the explicit override.
+
+## Start and first review
+
+From the repository root:
+
+```bash
+pnpm --dir reviewer install --ignore-scripts
+pnpm --dir reviewer run doctor
+pnpm --dir reviewer run review -- working_tree
+pnpm --dir reviewer run pr-preview -- OWNER REPO NUMBER
+REVIEWER_STATUS_TOKEN="$(openssl rand -hex 32)" pnpm --dir reviewer run serve
+```
+
+The default review is static-only. To make one cloud request under an explicit ceiling, set `REVIEWER_PROFILE`, `REVIEWER_CLOUD_BUDGET_USD`, and `REVIEWER_AUTHORIZE_CLOUD=true` for that command. Stop `serve` with `Ctrl-C` or `SIGTERM`. Use `reviewer/reviewer.service.example` only on a WSL2 installation that provides systemd; no host service was changed by this build.
 
 ## Checkpoint
 

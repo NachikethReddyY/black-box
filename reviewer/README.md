@@ -12,6 +12,7 @@ pnpm run review -- working_tree
 pnpm run review -- staged
 pnpm run pr-preview -- OWNER REPO NUMBER
 pnpm run status
+REVIEWER_STATUS_TOKEN='local-secret' pnpm run serve
 pnpm run backup -- /home/reviewer/backups/reviewer
 pnpm run restore -- /home/reviewer/backups/reviewer/reviewer.sqlite
 pnpm test
@@ -23,6 +24,8 @@ The default profile is `static_only`. It performs snapshot capture, local secret
 Run the commands from either the repository root with `pnpm --dir reviewer ...` or from `reviewer/` with `pnpm ...`. The CLI discovers the enclosing Git worktree by default. Set `REVIEWER_ROOT` when the repository is elsewhere and `REVIEWER_ENV_FILE` when credentials live outside the default `.env` locations.
 
 Supported profiles are `economy_cloud_luna_v1` for the direct OpenAI Responses API and `economy_cloud_tokenrouter_luna_v1` for an explicitly configured TokenRouter endpoint. Provider keys are read from protected environment configuration. The CLI never prints them. Public PR metadata and archive reads can run without `GITHUB_TOKEN`; private repositories and any future publication require a configured credential.
+
+`serve` binds only to `127.0.0.1`. `/healthz` is unauthenticated for local process checks; `/status` requires `Authorization: Bearer $REVIEWER_STATUS_TOKEN` and returns SQLite integrity plus review metadata. Stop it with `Ctrl-C` or `SIGTERM`. It does not authorize reviews, model spending, repository writes, or GitHub publication.
 
 ## Evidence and limits
 
