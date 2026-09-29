@@ -1,6 +1,6 @@
 # BlackBox dispatcher Worker v0.1
 
-This Worker accepts signed GitHub `pull_request` and `push` webhooks and stores metadata in D1. It reconciles the official GitHub Actions run after dispatch. It does not proxy builds, logs, artifacts, or runner traffic.
+This Worker accepts signed GitHub `pull_request` and `push` webhooks and stores metadata in D1. It reconciles the official GitHub Actions run after dispatch. It also serves the Black Box dashboard: GitHub OAuth sessions are encrypted in D1, and the browser receives normalized repositories, workflow runs, jobs, and bounded job logs. It does not proxy builds, artifacts, or runner traffic.
 
 ## Lifecycle
 
@@ -38,6 +38,11 @@ Required local secrets and vars:
 - `ENABLE_PAID_FALLBACKS`: defaults to false.
 - `GITHUB_WORKFLOW_FILE`, `GITHUB_WORKFLOW_REF`: workflow file and dispatch ref.
 - `HOME_RUNNER_LABEL`: optional self-hosted runner label, default `black-box-linux`. Availability comes from GitHub's repository self-hosted runner API and requires an online, idle runner with `self-hosted`, `linux`, `x64`, and `black-box-linux` labels. An offline or busy HOME runner fails closed to `waiting`; paid fallbacks are only considered when explicitly enabled.
+- `GITHUB_OAUTH_CLIENT_ID`: the GitHub App OAuth client ID. The current App client ID is public metadata and is documented in `dashboard/README.md`.
+- `GITHUB_OAUTH_CLIENT_SECRET`: the GitHub App OAuth client secret. Store it with `wrangler secret put`; do not commit it.
+- `DASHBOARD_SESSION_SECRET`: a separate random secret used to encrypt OAuth tokens in D1.
+- `DASHBOARD_ORIGIN`: the exact dashboard origin allowed for credentialed API requests. Leave it unset when the dashboard is served by this Worker; set it to the local dashboard origin only for a deliberate local integration.
+- `HOST_AGENT_TOKEN`: a separate bearer secret for the WSL telemetry agent. Keep it out of the runner config committed to Git; place it in the protected `~/.config/black-box/telemetry.env` file described in `runner/SETUP.md`.
 
 GitHub returns the built-in `Linux` and `X64` labels with capital letters. The dispatcher compares labels case-insensitively, so the configured label can remain lowercase.
 
@@ -66,6 +71,9 @@ OPERATOR_TOKEN
 GITHUB_APP_ID
 GITHUB_APP_PRIVATE_KEY
 GITHUB_APP_INSTALLATION_ID
+GITHUB_OAUTH_CLIENT_SECRET
+DASHBOARD_SESSION_SECRET
+HOST_AGENT_TOKEN
 ```
 
 Then install the GitHub App on the allowlisted repository, configure the webhook URL as `/webhook`, and review the template before copying it into that repository. Runner registration remains a separate owner action because it requires a short-lived GitHub registration token.

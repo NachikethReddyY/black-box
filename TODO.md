@@ -43,8 +43,19 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [x] Build the selected frontend shell and responsive navigation.
 - [x] Generate and wire an original Black Box mark.
 - [x] Use `ynrlib/icons` for the dashboard icon family.
-- [ ] Add private GitHub OAuth session endpoints without exposing tokens to the browser.
-- [ ] Add repository, workflow, run, job, log, and usage views backed by GitHub APIs.
+- [x] Add private GitHub OAuth session endpoints without exposing tokens to the browser.
+- [x] Add repository, workflow, run, job, and bounded log views backed by GitHub APIs.
 - [ ] Add authenticated WSL host metrics ingestion and resource view.
 - [x] Verify the dashboard shell, Run History, Logs, Runners, search, responsive layout, and production build in a browser.
-- [ ] Document and implement the OAuth credential gate.
+- [x] Document and implement the OAuth credential gate.
+- [ ] Set the GitHub App OAuth client secret and dashboard session secret in Cloudflare.
+
+### CI intelligence backlog
+
+- [ ] Add an agent-owned SQLite history for job timelines, structured test reports, cache events, and bounded searchable logs.
+- [ ] Add cache explanations with explicit `reused`, `rebuilt`, `downloaded`, `evicted`, or `unknown` reasons.
+- [ ] Add JUnit ingestion with stable test identities, attempts, durations, and failure signatures.
+- [ ] Add execution manifests and `bb reproduce` only after a clean-workspace boundary is available.
+- [ ] Add `bb doctor`, WSL resource admission, draining mode, and startup cleanup checks.
+- [ ] Add evidence-backed PR summaries and diagnostic actions before AI suggestions.
+- [ ] Add reviewed AI explanations and patches only after logs, diffs, and test reports are redacted and bounded.

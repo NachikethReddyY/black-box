@@ -1,121 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  Activity,
-  Archive,
-  BarChart3,
-  Check,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  CircleAlert,
-  CircleDashed,
-  Clock3,
-  Code2,
-  Database,
-  ExternalLink,
-  FileSearch,
-  Filter,
-  GitBranch,
-  GitCommitHorizontal,
-  GitPullRequest,
-  HardDrive,
-  LayoutDashboard,
-  ListFilter,
-  MoreHorizontal,
-  Search,
-  Server,
-  Settings2,
-  SlidersHorizontal,
-  TerminalSquare,
-  X,
+  Activity, Archive, BarChart3, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, CircleDashed,
+  Clock3, Code2, Database, ExternalLink, FileSearch, Filter, GitBranch, GitPullRequest, HardDrive,
+  LayoutDashboard, ListFilter, LogIn, MoreHorizontal, Search, Server, Settings2, SlidersHorizontal,
+  TerminalSquare, X,
 } from "ynrlib/icons";
+import { apiErrorMessage, apiErrorStatus, dashboardApi } from "./api";
+import type { DashboardJob, DashboardLogLine, DashboardPayload, DashboardRun } from "./api";
 
 type Section = "history" | "logs" | "runners" | "analytics" | "storage";
-
-type Run = {
-  title: string;
-  repo: string;
-  branch: string;
-  event: string;
-  actor: string;
-  age: string;
-  duration: string;
-  status: "success" | "failed" | "running";
-  runner: string;
-};
-
-const runs: Run[] = [
-  {
-    title: "AMR checks",
-    repo: "AMR-Fan-App",
-    branch: "main",
-    event: "Pull request",
-    actor: "NachikethReddyY",
-    age: "12 min ago",
-    duration: "4m 18s",
-    status: "success",
-    runner: "black-box-vbook",
-  },
-  {
-    title: "Black Box CI",
-    repo: "black-box-ci",
-    branch: "main",
-    event: "Push",
-    actor: "NachikethReddyY",
-    age: "27 min ago",
-    duration: "1m 42s",
-    status: "success",
-    runner: "black-box-vbook",
-  },
-  {
-    title: "AMR security",
-    repo: "AMR-Fan-App",
-    branch: "main",
-    event: "Schedule",
-    actor: "NachikethReddyY",
-    age: "41 min ago",
-    duration: "32s",
-    status: "failed",
-    runner: "black-box-vbook",
-  },
-  {
-    title: "Lint and typecheck",
-    repo: "devbox",
-    branch: "feature/ui",
-    event: "Push",
-    actor: "NachikethReddyY",
-    age: "1 hour ago",
-    duration: "18m 49s",
-    status: "success",
-    runner: "github-hosted",
-  },
-  {
-    title: "Preview build",
-    repo: "black-box-ci",
-    branch: "feat/log-search",
-    event: "Pull request",
-    actor: "NachikethReddyY",
-    age: "2 hours ago",
-    duration: "2m 08s",
-    status: "running",
-    runner: "black-box-vbook",
-  },
-];
-
-const logRows = [
-  ["INFO", "6453833", "code-coverage", "Cleanup completed"],
-  ["INFO", "6453833", "code-coverage", "Stopping container · black-box-postgres"],
-  ["INFO", "6453833", "code-coverage", "Removing temporary files"],
-  ["INFO", "6453833", "code-coverage", "Container stopped"],
-  ["DEBUG", "6453833", "code-coverage", "Cache lookup · pnpm-lock-v4 hit"],
-  ["INFO", "6453833", "code-coverage", "Post-job cleanup"],
-  ["WARN", "6453833", "build-docker-image", "Docker layer reused from local NVMe cache"],
-  ["ERROR", "6453821", "database-migrations", "Connection refused at localhost:5432"],
-  ["INFO", "6453821", "database-migrations", "Retrying in 5 seconds"],
-  ["INFO", "6453821", "database-migrations", "Migration container ready"],
-  ["INFO", "6453812", "build", "Tests completed · 184 passed"],
-];
-
+type RunStatus = "success" | "failed" | "running" | "queued";
 const navItems: Array<{ id: Section; label: string; icon: typeof Activity }> = [
   { id: "history", label: "Run History", icon: LayoutDashboard },
   { id: "logs", label: "Logs", icon: FileSearch },
@@ -124,237 +18,58 @@ const navItems: Array<{ id: Section; label: string; icon: typeof Activity }> = [
   { id: "storage", label: "Storage", icon: Archive },
 ];
 
-function StatusIcon({ status }: { status: Run["status"] }) {
-  if (status === "success") return <CheckCircle2 aria-hidden="true" className="status-icon success" />;
-  if (status === "failed") return <CircleAlert aria-hidden="true" className="status-icon failed" />;
-  return <CircleDashed aria-hidden="true" className="status-icon running" />;
-}
-
-function BlackBoxMark({ size = 32 }: { size?: number }) {
-  return (
-    <img
-      className="brand-mark"
-      src="/black-box-mark.png"
-      width={size}
-      height={size}
-      alt="Black Box"
-    />
-  );
-}
+function BlackBoxMark({ size = 32 }: { size?: number }) { return <img className="brand-mark" src="/black-box-mark.png" width={size} height={size} alt="Black Box" />; }
+function UserAvatar({ login, avatarUrl, small = false }: { login: string; avatarUrl?: string | null; small?: boolean }) { return avatarUrl ? <img className={`avatar ${small ? "avatar-small" : ""}`} src={avatarUrl} alt="" /> : <span className={`avatar ${small ? "avatar-small" : ""}`}>{login.slice(0, 2).toUpperCase()}</span>; }
+function runStatus(run: DashboardRun): RunStatus { if (run.status !== "completed") return run.status === "queued" ? "queued" : "running"; return run.conclusion === "success" ? "success" : "failed"; }
+function StatusIcon({ status }: { status: RunStatus }) { return status === "success" ? <CheckCircle2 aria-hidden="true" className="status-icon success" /> : status === "failed" ? <CircleAlert aria-hidden="true" className="status-icon failed" /> : <CircleDashed aria-hidden="true" className={`status-icon ${status}`} />; }
+function formatDuration(seconds: number | null | undefined): string { if (seconds === null || seconds === undefined) return "—"; if (seconds < 60) return `${seconds}s`; return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`; }
+function formatBytes(value: number | null | undefined): string { if (value === null || value === undefined) return "—"; const units = ["B", "GB", "TB"]; let amount = value; let index = 0; while (amount >= 1024 ** 3 && index < units.length - 1) { amount /= 1024 ** 3; index += 1; } return `${amount.toFixed(amount >= 100 ? 0 : 1)} ${units[index]}`; }
+function formatAge(iso: string): string { const seconds = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000)); if (seconds < 60) return "just now"; if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`; if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`; return `${Math.floor(seconds / 86400)}d ago`; }
+function displayName(login: string, name: string | null) { return name?.trim() || login; }
 
 export function App() {
   const [section, setSection] = useState<Section>("history");
   const [query, setQuery] = useState("");
   const [showNotice, setShowNotice] = useState(true);
   const [range, setRange] = useState("1D");
-
+  const [dashboard, setDashboard] = useState<DashboardPayload | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<unknown>(null);
+  const loadDashboard = () => { setLoading(true); setError(null); dashboardApi.getDashboard().then(setDashboard).catch(setError).finally(() => setLoading(false)); };
+  useEffect(() => loadDashboard(), []);
+  if (loading) return <StatusScreen title="Loading GitHub data" detail="Fetching repositories, workflow runs, and jobs from the connected account." />;
+  if (!dashboard && apiErrorStatus(error) === 401) return <LoginScreen />;
+  if (!dashboard) return <StatusScreen title="Black Box could not load GitHub data" detail={apiErrorMessage(error)} action={<button className="button button-light" onClick={loadDashboard}>Retry</button>} />;
   const title = navItems.find((item) => item.id === section)?.label ?? "Run History";
-  const filteredRuns = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return runs;
-    return runs.filter((run) => Object.values(run).some((value) => value.toLowerCase().includes(needle)));
-  }, [query]);
-
-  return (
-    <div className="app-shell">
-      <aside className="icon-rail" aria-label="Primary navigation">
-        <button className="rail-brand" aria-label="Black Box home" onClick={() => setSection("history")}>
-          <BlackBoxMark size={36} />
-        </button>
-        <div className="rail-actions">
-          {navItems.slice(0, 3).map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              className={`rail-button ${section === id ? "is-active" : ""}`}
-              aria-label={label}
-              aria-pressed={section === id}
-              onClick={() => setSection(id)}
-            >
-              <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
-            </button>
-          ))}
-        </div>
-        <div className="rail-spacer" />
-        <button className="rail-button" aria-label="Settings" onClick={() => setSection("storage")}>
-          <Settings2 size={18} strokeWidth={1.8} aria-hidden="true" />
-        </button>
-        <span className="online-dot" title="Black Box host online" />
-      </aside>
-
-      <aside className="context-sidebar">
-        <div className="product-heading">
-          <BlackBoxMark size={26} />
-          <div>
-            <strong>Black Box</strong>
-            <span>Personal CI control plane</span>
-          </div>
-          <button className="icon-button" aria-label="Search dashboard">
-            <Search size={17} strokeWidth={1.8} aria-hidden="true" />
-          </button>
-        </div>
-
-        <nav className="side-nav" aria-label="Dashboard sections">
-          {navItems.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              className={`side-nav-item ${section === id ? "is-active" : ""}`}
-              aria-current={section === id ? "page" : undefined}
-              onClick={() => setSection(id)}
-            >
-              <Icon size={16} strokeWidth={1.8} aria-hidden="true" />
-              <span>{label}</span>
-              {(id === "history" || id === "analytics" || id === "storage") && <ChevronRight size={14} aria-hidden="true" />}
-            </button>
-          ))}
-        </nav>
-
-        {section === "logs" ? <LogFilters /> : <HistoryFilters />}
-
-        <div className="sidebar-user">
-          <div className="avatar">NR</div>
-          <div className="user-copy"><strong>Nachiketh Reddy</strong><span>GitHub connected</span></div>
-          <ChevronDown size={15} aria-hidden="true" />
-        </div>
-      </aside>
-
-      <main className="main-content">
-        <header className="topbar">
-          <div className="title-block">
-            <span className="eyebrow"><span className="eyebrow-mark" /> Black Box / GitHub Actions</span>
-            <h1>{title}</h1>
-          </div>
-          <div className="topbar-actions">
-            <div className="range-control" aria-label="Time range">
-              {["1h", "4h", "12h", "1D", "2D", "5D"].map((item) => (
-                <button key={item} className={range === item ? "is-selected" : ""} onClick={() => setRange(item)}>{item}</button>
-              ))}
-            </div>
-            <button className="date-control"><Clock3 size={14} aria-hidden="true" /> Sep 28, 10:53 AM – Sep 29, 10:53 AM UTC</button>
-          </div>
-        </header>
-
-        <div className="content-scroll">
-          {showNotice && (
-            <div className="migration-notice">
-              <div className="notice-symbol"><Code2 size={17} strokeWidth={1.8} aria-hidden="true" /></div>
-              <div><strong>Black Box is connected</strong><span>AMR-Fan-App can now run trusted workflows on black-box-vbook.</span></div>
-              <button aria-label="Dismiss connection notice" onClick={() => setShowNotice(false)}><X size={16} aria-hidden="true" /></button>
-            </div>
-          )}
-
-          {section === "history" && <RunHistoryView query={query} setQuery={setQuery} filteredRuns={filteredRuns} />}
-          {section === "logs" && <LogsView query={query} setQuery={setQuery} />}
-          {section === "runners" && <RunnersView />}
-          {section === "analytics" && <AnalyticsView />}
-          {section === "storage" && <StorageView />}
-        </div>
-      </main>
-    </div>
-  );
+  const filteredRuns = dashboard.runs.filter((run) => { const needle = query.trim().toLowerCase(); return !needle || [run.title, run.name, run.repo, run.branch, run.event, run.status, run.conclusion ?? ""].some((value) => value.toLowerCase().includes(needle)); });
+  return <div className="app-shell">
+    <aside className="icon-rail" aria-label="Primary navigation"><button className="rail-brand" aria-label="Black Box home" onClick={() => setSection("history")}><BlackBoxMark size={36} /></button><div className="rail-actions">{navItems.slice(0, 3).map(({ id, label, icon: Icon }) => <button key={id} className={`rail-button ${section === id ? "is-active" : ""}`} aria-label={label} aria-pressed={section === id} onClick={() => setSection(id)}><Icon size={18} strokeWidth={1.8} aria-hidden="true" /></button>)}</div><div className="rail-spacer" /><button className="rail-button" aria-label="Settings" onClick={() => setSection("storage")}><Settings2 size={18} strokeWidth={1.8} aria-hidden="true" /></button><span className="online-dot" title="GitHub data connected" /></aside>
+    <aside className="context-sidebar"><div className="product-heading"><BlackBoxMark size={26} /><div><strong>Black Box</strong><span>Personal CI control plane</span></div><button className="icon-button" aria-label="Refresh dashboard" onClick={loadDashboard}><Search size={17} strokeWidth={1.8} aria-hidden="true" /></button></div><nav className="side-nav" aria-label="Dashboard sections">{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={`side-nav-item ${section === id ? "is-active" : ""}`} aria-current={section === id ? "page" : undefined} onClick={() => setSection(id)}><Icon size={16} strokeWidth={1.8} aria-hidden="true" /><span>{label}</span>{(id === "history" || id === "analytics" || id === "storage") && <ChevronRight size={14} aria-hidden="true" />}</button>)}</nav>{section === "logs" ? <LogFilters jobs={dashboard.jobs} /> : <HistoryFilters repositories={dashboard.repositories.map((repo) => repo.fullName)} runs={dashboard.runs} />}<div className="sidebar-user"><UserAvatar login={dashboard.user.login} avatarUrl={dashboard.user.avatarUrl} /><div className="user-copy"><strong>{displayName(dashboard.user.login, dashboard.user.name)}</strong><span>GitHub connected</span></div><ChevronDown size={15} aria-hidden="true" /></div></aside>
+    <main className="main-content"><header className="topbar"><div className="title-block"><span className="eyebrow"><span className="eyebrow-mark" /> Black Box / GitHub Actions</span><h1>{title}</h1></div><div className="topbar-actions"><div className="range-control" aria-label="Time range">{["1h", "4h", "12h", "1D", "2D", "5D"].map((item) => <button key={item} className={range === item ? "is-selected" : ""} onClick={() => setRange(item)}>{item}</button>)}</div><button className="date-control"><Clock3 size={14} aria-hidden="true" /> Updated {formatAge(dashboard.fetchedAt)}</button></div></header><div className="content-scroll">{showNotice && <div className="migration-notice"><div className="notice-symbol"><Code2 size={17} strokeWidth={1.8} aria-hidden="true" /></div><div><strong>GitHub data is live</strong><span>{dashboard.repositories.length} repositories · {dashboard.runs.length} recent workflow runs loaded.</span></div><button aria-label="Dismiss connection notice" onClick={() => setShowNotice(false)}><X size={16} aria-hidden="true" /></button></div>}{section === "history" && <RunHistoryView query={query} setQuery={setQuery} runs={filteredRuns} allRuns={dashboard.runs} />}{section === "logs" && <LogsView jobs={dashboard.jobs} />}{section === "runners" && <RunnersView host={dashboard.host} />}{section === "analytics" && <AnalyticsView runs={dashboard.runs} />}{section === "storage" && <StorageView host={dashboard.host} />}</div></main>
+  </div>;
 }
 
-function HistoryFilters() {
-  return (
-    <div className="filter-groups">
-      <FilterGroup title="Repositories" items={["AMR-Fan-App", "black-box-ci", "devbox"]} />
-      <FilterGroup title="Workflows" items={["Black Box CI", "checks.yml", "security.yml"]} />
-      <FilterGroup title="Runners" items={["black-box-vbook", "GitHub-hosted"]} />
-    </div>
-  );
-}
+function StatusScreen({ title, detail, action }: { title: string; detail: string; action?: ReactNode }) { return <main className="status-screen"><BlackBoxMark size={54} /><span className="eyebrow">Black Box / GitHub Actions</span><h1>{title}</h1><p>{detail}</p>{action}</main>; }
+function LoginScreen() { const loginUrl = `${dashboardApi.baseUrl}/auth/github` || "/auth/github"; return <main className="status-screen"><BlackBoxMark size={54} /><span className="eyebrow">Black Box / GitHub Actions</span><h1>Connect GitHub to inspect your CI</h1><p>Black Box reads repositories, workflow runs, jobs, and logs with a server-side GitHub session. No access token is sent to this browser.</p><a className="button button-light" href={loginUrl}><LogIn size={15} aria-hidden="true" /> Continue with GitHub</a></main>; }
+function HistoryFilters({ repositories, runs }: { repositories: string[]; runs: DashboardRun[] }) { return <div className="filter-groups"><FilterGroup title="Repositories" items={repositories.slice(0, 6)} /><FilterGroup title="Workflows" items={[...new Set(runs.map((run) => run.name))].slice(0, 8)} /><FilterGroup title="Sources" items={[...new Set(runs.map((run) => run.event))]} /></div>; }
+function LogFilters({ jobs }: { jobs: DashboardJob[] }) { return <div className="filter-groups"><FilterGroup title="Jobs" items={[...new Set(jobs.map((job) => job.name))].slice(0, 8)} /><FilterGroup title="Outcomes" items={["Success", "Failure", "Queued"]} /><FilterGroup title="Repositories" items={[...new Set(jobs.map((job) => job.repo))].slice(0, 6)} /></div>; }
+function FilterGroup({ title, items }: { title: string; items: string[] }) { return <section className="filter-group"><div className="filter-heading"><span>{title}</span><ChevronDown size={14} aria-hidden="true" /></div><label className="filter-search"><Search size={14} aria-hidden="true" /><input placeholder={`Filter ${title.toLowerCase()}...`} /></label>{items.length ? items.map((item) => <label className="check-row" key={item}><input type="checkbox" /><span className="fake-check" /><span>{item}</span></label>) : <span className="sidebar-empty">No data loaded</span>}</section>; }
 
-function LogFilters() {
-  return (
-    <div className="filter-groups">
-      <FilterGroup title="Workflows" items={["build", "build-docker-image", "code-coverage", "database-migrations"]} />
-      <FilterGroup title="Levels" items={["Info", "Warn", "Error", "Debug"]} />
-      <FilterGroup title="Branches" items={["main", "feature/ui"]} />
-    </div>
-  );
-}
+function RunHistoryView({ query, setQuery, runs, allRuns }: { query: string; setQuery: (value: string) => void; runs: DashboardRun[]; allRuns: DashboardRun[] }) { return <><section className="intro-row"><div><span className="eyebrow">Signal over noise</span><h2>Find the run you’re looking for</h2><p>These are live workflow runs from GitHub. Filter by repository, workflow, branch, event, or result and open the original run when you need the full trace.</p></div><div className="intro-actions"><button className="button button-light" onClick={() => setQuery("")}><SlidersHorizontal size={15} aria-hidden="true" /> Clear search</button><a className="button button-quiet" href="https://docs.github.com/en/actions" target="_blank" rel="noreferrer"><ExternalLink size={15} aria-hidden="true" /> GitHub Actions docs</a></div></section><RunDistribution runs={allRuns} /><section className="work-area"><div className="inline-filters"><div className="section-caption"><Filter size={14} aria-hidden="true" /> Active search</div>{query && <button className="filter-chip" onClick={() => setQuery("")}>{query}<X size={12} aria-hidden="true" /></button>}<span className="sidebar-empty">{query ? "Matching live runs" : "No filters"}</span></div><div className="results-panel"><div className="results-header"><div><span className="eyebrow">Runs</span><strong>{runs.length} shown · {allRuns.length} loaded</strong></div><label className="table-search"><Search size={15} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search runs" /></label><button className="icon-button" aria-label="More run options"><MoreHorizontal size={18} aria-hidden="true" /></button></div><div className="run-list">{runs.length ? runs.map((run) => <RunRow key={`${run.id}-${run.attempt}`} run={run} />) : <EmptyState title="No matching runs" detail="Try a repository, workflow, branch, or status." />}</div></div></section></>; }
+function RunDistribution({ runs }: { runs: DashboardRun[] }) { const recent = runs.slice(0, 24).reverse(); const points = recent.length ? recent.map((run, index) => `${index * (1000 / Math.max(recent.length - 1, 1))},${runStatus(run) === "failed" ? 75 : runStatus(run) === "success" ? 34 : 52}`).join(" ") : "0,90 1000,90"; const success = runs.filter((run) => runStatus(run) === "success").length; const failed = runs.filter((run) => runStatus(run) === "failed").length; return <section className="chart-panel"><div className="section-caption"><Activity size={14} aria-hidden="true" /> Workflow run distribution <span>last {runs.length} loaded runs</span></div><svg className="line-chart" viewBox="0 0 1000 110" preserveAspectRatio="none" aria-label="Workflow run distribution chart"><polyline points={points} /></svg><div className="chart-legend"><span><i className="legend-dot success" /> success {success}</span><span><i className="legend-dot failed" /> failed {failed}</span><span>source · GitHub Actions API</span></div></section>; }
+function RunRow({ run }: { run: DashboardRun }) { const status = runStatus(run); return <article className="run-row"><StatusIcon status={status} /><div className="run-main"><strong>{run.title || run.name}</strong><span><UserAvatar login={String(run.runNumber)} small />{run.name}<em>·</em><b>{run.repo}</b><em>·</em><GitBranch size={12} aria-hidden="true" />{run.branch}<em>·</em>{run.event}</span></div><div className="run-meta"><span>{formatAge(run.updatedAt)}</span><span>{formatDuration(run.durationSeconds)}</span><i className={`duration-bar ${status}`} /></div><a className={`run-state ${status}`} href={run.htmlUrl} target="_blank" rel="noreferrer">{status}<ExternalLink size={12} aria-hidden="true" /></a></article>; }
 
-function FilterGroup({ title, items }: { title: string; items: string[] }) {
-  return (
-    <section className="filter-group">
-      <div className="filter-heading"><span>{title}</span><ChevronDown size={14} aria-hidden="true" /></div>
-      <label className="filter-search"><Search size={14} aria-hidden="true" /><input placeholder={`Filter ${title.toLowerCase()}...`} /></label>
-      {items.map((item) => <label className="check-row" key={item}><input type="checkbox" /><span className="fake-check" /><span>{item}</span></label>)}
-    </section>
-  );
-}
+function LogsView({ jobs }: { jobs: DashboardJob[] }) {
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(jobs[0]?.id ?? null); const [query, setQuery] = useState(""); const [lines, setLines] = useState<DashboardLogLine[]>([]); const [loading, setLoading] = useState(false); const [error, setError] = useState<string | null>(null); const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? null;
+  useEffect(() => { if (!selectedJob) { setLines([]); return; } setLoading(true); setError(null); dashboardApi.getJobLogs(selectedJob).then(setLines).catch((reason) => setError(apiErrorMessage(reason))).finally(() => setLoading(false)); }, [selectedJobId, selectedJob]);
+  const filtered = lines.filter((line) => line.message.toLowerCase().includes(query.toLowerCase()));
+  return <><section className="intro-row"><div><span className="eyebrow">Trace every signal</span><h2>Debug flaky tests and bugs</h2><p>Job logs come from GitHub’s log endpoint and load only for the selected job. Black Box truncates a single response at 2 MiB.</p></div><div className="intro-actions"><button className="button button-light" onClick={() => selectedJob && setSelectedJobId(selectedJob.id)}><FileSearch size={15} aria-hidden="true" /> Reload log</button><button className="button button-quiet">Retention <ChevronRight size={14} aria-hidden="true" /></button></div></section><LogVolume count={lines.length} loading={loading} /><section className="logs-panel"><div className="results-header"><div><span className="eyebrow">Job log</span><strong>{jobs.length} jobs available</strong></div><select className="job-select" aria-label="Select job log" value={selectedJobId ?? ""} onChange={(event) => setSelectedJobId(event.target.value ? Number(event.target.value) : null)}><option value="">Choose a job</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.repo} · {job.name}</option>)}</select><label className="table-search wide"><Search size={15} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this log..." /></label><button className="button button-quiet"><ListFilter size={15} aria-hidden="true" /> Filters</button></div>{error ? <EmptyState title="Log could not be loaded" detail={error} /> : !selectedJob ? <EmptyState title="Choose a job to inspect its log" detail="Black Box fetches a log only after you select a job." /> : <div className="log-table"><div className="log-header"><span>Level</span><span>Job ID</span><span>Job name</span><span>Message</span></div>{filtered.length ? filtered.map((line, index) => <div className="log-row" key={`${selectedJob.id}-${index}`}><span className={`log-level ${line.level.toLowerCase()}`}>{line.level}</span><span className="mono">{selectedJob.id}</span><span className="job-name">{selectedJob.name}</span><span className="log-message">{line.message}</span></div>) : <EmptyState title={loading ? "Loading job log" : "No matching log lines"} detail={loading ? "Fetching the selected job output from GitHub." : "Try a different search term."} />}</div>}</section></>; }
+function LogVolume({ count, loading }: { count: number; loading: boolean }) { const heights = [22, 28, 31, 35, 43, 49, 55, 61, 68, 75, 64, 71, 83, 89, 98, 90, 57, 48, 37, 29, 20, 13]; return <section className="chart-panel log-volume"><div className="section-caption"><Activity size={14} aria-hidden="true" /> Selected log volume <span>{loading ? "loading" : `${count.toLocaleString()} lines loaded`}</span></div><div className="bar-chart" aria-label="Selected job log volume chart">{heights.map((height, index) => <i className={`volume-bar ${index === 10 ? "warn" : ""} ${index === 14 || index === 15 ? "error" : ""}`} style={{ height: `${height}%` }} key={index} />)}</div><div className="chart-legend"><span><i className="legend-dot info" /> source · GitHub job logs</span><span><i className="legend-dot warn" /> bounded response</span></div></section>; }
 
-function RunHistoryView({ query, setQuery, filteredRuns }: { query: string; setQuery: (value: string) => void; filteredRuns: Run[] }) {
-  return (
-    <>
-      <section className="intro-row">
-        <div><span className="eyebrow">Signal over noise</span><h2>Find the run you’re looking for</h2><p>Filter by repository, workflow, branch, event, status, or runner. Open a run to inspect every job and log.</p></div>
-        <div className="intro-actions"><button className="button button-light"><SlidersHorizontal size={15} aria-hidden="true" /> Configure filters</button><button className="button button-quiet"><ExternalLink size={15} aria-hidden="true" /> Docs</button></div>
-      </section>
-      <RunDistribution />
-      <section className="work-area">
-        <div className="inline-filters">
-          <div className="section-caption"><Filter size={14} aria-hidden="true" /> Active filters</div>
-          {['Pull request', 'Push', 'Success'].map((filter) => <button className="filter-chip" key={filter}>{filter}<X size={12} aria-hidden="true" /></button>)}
-          <button className="clear-filters">Clear</button>
-        </div>
-        <div className="results-panel">
-          <div className="results-header"><div><span className="eyebrow">Runs</span><strong>196 total</strong></div><label className="table-search"><Search size={15} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search runs" /></label><button className="icon-button" aria-label="More run options"><MoreHorizontal size={18} aria-hidden="true" /></button></div>
-          <div className="run-list">{filteredRuns.map((run) => <RunRow key={`${run.title}-${run.age}`} run={run} />)}</div>
-        </div>
-      </section>
-    </>
-  );
-}
-
-function RunDistribution() {
-  const points = "0,90 90,72 180,82 270,54 360,72 450,37 540,58 630,18 720,47 810,22 900,54 1000,30";
-  return <section className="chart-panel"><div className="section-caption"><Activity size={14} aria-hidden="true" /> Workflow run distribution <span>success · failed · running · queued</span></div><svg className="line-chart" viewBox="0 0 1000 110" preserveAspectRatio="none" aria-label="Workflow run distribution chart"><path className="chart-area" d={`M${points.replaceAll(" ", " L")} L1000,110 L0,110 Z`} /><polyline points={points} /></svg><div className="chart-legend"><span><i className="legend-dot success" /> success 184</span><span><i className="legend-dot failed" /> failed 12</span><span>wall time · 1,294 minutes</span></div></section>;
-}
-
-function RunRow({ run }: { run: Run }) {
-  return <article className="run-row"><StatusIcon status={run.status} /><div className="run-main"><strong>{run.title}</strong><span><span className="avatar avatar-small">NR</span>{run.actor}<em>·</em><b>{run.repo}</b><em>·</em><GitBranch size={12} aria-hidden="true" />{run.branch}<em>·</em>{run.event}</span></div><div className="run-meta"><span>{run.age}</span><span>{run.duration}</span><i className={`duration-bar ${run.status}`} /></div><div className={`run-state ${run.status}`}>{run.status}</div></article>;
-}
-
-function LogsView({ query, setQuery }: { query: string; setQuery: (value: string) => void }) {
-  const filtered = logRows.filter((row) => row.join(" ").toLowerCase().includes(query.toLowerCase()));
-  return <>
-    <section className="intro-row">
-      <div><span className="eyebrow">Trace every signal</span><h2>Debug flaky tests and bugs</h2><p>Search across Black Box logs to see what failed, when it failed, and which job or runner produced it.</p></div>
-      <div className="intro-actions"><button className="button button-light"><FileSearch size={15} aria-hidden="true" /> Search all logs</button><button className="button button-quiet"><ExternalLink size={15} aria-hidden="true" /> Retention</button></div>
-    </section>
-    <LogVolume />
-    <section className="logs-panel">
-      <div className="results-header"><div><span className="eyebrow">Log events</span><strong>1,957,007 indexed</strong></div><label className="table-search wide"><Search size={15} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search message, job, run ID..." /></label><button className="button button-quiet"><ListFilter size={15} aria-hidden="true" /> Filters</button></div>
-      <div className="log-table"><div className="log-header"><span>Level</span><span>Run ID</span><span>Job name</span><span>Message</span></div>{filtered.map(([level, runId, job, message], index) => <div className="log-row" key={`${runId}-${index}`}><span className={`log-level ${level.toLowerCase()}`}>{level}</span><span className="mono">{runId}</span><span className="job-name">{job}</span><span className="log-message">{message}</span></div>)}</div>
-    </section>
-  </>;
-}
-
-function LogVolume() {
-  const heights = [22, 28, 31, 35, 43, 49, 55, 61, 68, 75, 64, 71, 83, 89, 98, 90, 57, 48, 37, 29, 20, 13];
-  return <section className="chart-panel log-volume"><div className="section-caption"><Activity size={14} aria-hidden="true" /> Log volume <span>1,957,007 logs found · 30 day retention</span></div><div className="bar-chart" aria-label="Log volume chart">{heights.map((height, index) => <i className={`volume-bar ${index === 10 ? "warn" : ""} ${index === 14 || index === 15 ? "error" : ""}`} style={{ height: `${height}%` }} key={index} />)}</div><div className="chart-legend"><span><i className="legend-dot info" /> info 1.82m</span><span><i className="legend-dot warn" /> warn 92k</span><span><i className="legend-dot failed" /> error 44k</span></div></section>;
-}
-
-function RunnersView() {
-  return <section className="overview-page"><div className="page-heading"><div><span className="eyebrow">Execution capacity</span><h2>Runners</h2><p>See where work is running and whether the home computer is ready for the next job.</p></div><button className="button button-light"><Settings2 size={15} aria-hidden="true" /> Runner settings</button></div><div className="metric-grid"><Metric label="Runner status" value="Online" detail="black-box-vbook · idle" icon={<Server size={18} />} tone="success" /><Metric label="CPU" value="18%" detail="i9 · 16 logical threads" icon={<Activity size={18} />} /><Metric label="Memory" value="6.4 / 16 GB" detail="WSL2 limit · 8 GB" icon={<Database size={18} />} /><Metric label="Storage" value="742 GB" detail="available on NVMe" icon={<HardDrive size={18} />} /></div><div className="runner-card"><div className="runner-card-heading"><div><span className="eyebrow">Home runner</span><h3>black-box-vbook</h3></div><span className="status-badge success"><span /> Ready</span></div><div className="runner-details"><span><GitBranch size={15} /> self-hosted · Linux · X64</span><span><TerminalSquare size={15} /> WSL2 Ubuntu</span><span><Clock3 size={15} /> last heartbeat 18s ago</span></div><div className="capacity-track"><i style={{ width: "18%" }} /></div><div className="runner-footer"><span>1 concurrent job slot</span><button className="button button-quiet">Open host details <ChevronRight size={14} /></button></div></div></section>;
-}
-
-function AnalyticsView() {
-  return <section className="overview-page"><div className="page-heading"><div><span className="eyebrow">Measure the work</span><h2>Analytics</h2><p>Use observed run history to find slow steps, failures, and the savings from home execution.</p></div><button className="button button-light"><GitCommitHorizontal size={15} aria-hidden="true" /> Compare periods</button></div><div className="metric-grid"><Metric label="Runs this week" value="196" detail="184 successful · 12 failed" icon={<GitPullRequest size={18} />} /><Metric label="Home execution" value="82%" detail="160 runs on black-box-vbook" icon={<Server size={18} />} tone="success" /><Metric label="Median runtime" value="2m 14s" detail="down 18% from last week" icon={<Clock3 size={18} />} /><Metric label="Cache hit rate" value="94%" detail="pnpm + Docker layers" icon={<Database size={18} />} tone="success" /></div><div className="insight-list"><Insight title="Docker build slowed down" detail="build-docker-image is 42% slower than its 30-run baseline." status="Investigate" /><Insight title="One test may be flaky" detail="auth.refresh.test failed 3 times and passed on rerun each time." status="Review" /><Insight title="Home runner is saving minutes" detail="160 runs avoided GitHub-hosted execution this week." status="Good" /></div></section>;
-}
-
-function StorageView() {
-  return <section className="overview-page"><div className="page-heading"><div><span className="eyebrow">Local state</span><h2>Storage</h2><p>Keep the fast, reusable parts of CI close to the WSL2 runner.</p></div><button className="button button-light"><SlidersHorizontal size={15} aria-hidden="true" /> Storage policy</button></div><div className="storage-layout"><div className="storage-meter"><div className="meter-ring"><strong>38%</strong><span>used</span></div><span>742 GB available</span></div><div className="storage-list"><StorageRow icon={<Database size={17} />} label="BuildKit layers" value="96.2 GB" detail="AMR-Fan-App · black-box-ci" /><StorageRow icon={<Archive size={17} />} label="Actions cache" value="41.8 GB" detail="64 cache keys · 30 day retention" /><StorageRow icon={<GitBranch size={17} />} label="Package stores" value="12.4 GB" detail="pnpm · npm · pip" /><StorageRow icon={<HardDrive size={17} />} label="Runner images" value="8.1 GB" detail="Ubuntu WSL2 base" /></div></div></section>;
-}
-
-function Metric({ label, value, detail, icon, tone }: { label: string; value: string; detail: string; icon: React.ReactNode; tone?: "success" }) {
-  return <article className="metric-card"><div className="metric-icon">{icon}</div><span className="metric-label">{label}</span><strong className={tone === "success" ? "success-text" : ""}>{value}</strong><small>{detail}</small></article>;
-}
-
-function Insight({ title, detail, status }: { title: string; detail: string; status: string }) {
-  return <article className="insight-row"><div className="insight-icon"><CircleAlert size={16} /></div><div><strong>{title}</strong><span>{detail}</span></div><button className="button button-quiet">{status} <ChevronRight size={14} /></button></article>;
-}
-
-function StorageRow({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
-  return <div className="storage-row"><span className="storage-icon">{icon}</span><div><strong>{label}</strong><span>{detail}</span></div><b>{value}</b></div>;
-}
+function RunnersView({ host }: { host: DashboardPayload["host"] }) { const online = host?.status === "online"; return <section className="overview-page"><div className="page-heading"><div><span className="eyebrow">Execution capacity</span><h2>Runners</h2><p>These values come from the signed WSL host telemetry agent. A stale host is shown as stale instead of being treated as ready.</p></div><button className="button button-quiet" disabled><Settings2 size={15} aria-hidden="true" /> Agent setup needed</button></div><div className="metric-grid"><Metric label="Host status" value={host ? (online ? "Online" : "Stale") : "Not reported"} detail={host ? `${host.hostname} · ${host.ageSeconds}s ago` : "WSL telemetry endpoint is not connected"} icon={<Server size={18} />} tone={online ? "success" : undefined} /><Metric label="CPU" value={host ? `${host.cpuPercent.toFixed(1)}%` : "—"} detail={host ? "host-wide sample" : "Awaiting host agent"} icon={<Activity size={18} />} /><Metric label="Memory" value={host ? `${formatBytes(host.memoryUsedBytes)} / ${formatBytes(host.memoryTotalBytes)}` : "—"} detail={host?.wslMemoryLimitBytes ? `WSL limit ${formatBytes(host.wslMemoryLimitBytes)}` : "Awaiting host agent"} icon={<Database size={18} />} /><Metric label="Storage" value={host ? formatBytes(host.diskFreeBytes) : "—"} detail={host ? `free of ${formatBytes(host.diskTotalBytes)}` : "Awaiting host agent"} icon={<HardDrive size={18} />} /></div><div className="runner-card"><div className="runner-card-heading"><div><span className="eyebrow">GitHub runner telemetry</span><h3>{host?.runnerName ?? "Not yet connected"}</h3></div><span className="status-badge"><span style={{ background: online ? "var(--green)" : "var(--yellow)" }} /> {host ? (online ? "Ready" : "Stale") : "Awaiting agent"}</span></div><div className="runner-details"><span><GitBranch size={15} /> self-hosted · Linux · X64</span><span><TerminalSquare size={15} /> WSL2 Ubuntu</span><span><Database size={15} /> Docker {host ? (host.dockerReady ? "ready" : "not ready") : "unknown"}</span></div><div className="runner-footer"><span>{host ? `Last telemetry ${host.ageSeconds}s ago` : "Real hardware values are never estimated"}</span><button className="button button-quiet" disabled>Open host details <ChevronRight size={14} /></button></div></div></section>; }
+function AnalyticsView({ runs }: { runs: DashboardRun[] }) { const successes = runs.filter((run) => runStatus(run) === "success").length; const failures = runs.filter((run) => runStatus(run) === "failed").length; const durations = runs.map((run) => run.durationSeconds).filter((value) => value > 0).sort((a, b) => a - b); const median = durations.length ? durations[Math.floor(durations.length / 2)] : null; const failedRuns = runs.filter((run) => runStatus(run) === "failed").slice(0, 4); return <section className="overview-page"><div className="page-heading"><div><span className="eyebrow">Measure the work</span><h2>Analytics</h2><p>These metrics come from live GitHub workflow runs. Host cost, cache hits, and flaky-test rates need Black Box agent data.</p></div><button className="button button-quiet" disabled><GitPullRequest size={15} aria-hidden="true" /> Compare periods later</button></div><div className="metric-grid"><Metric label="Loaded runs" value={String(runs.length)} detail={`${successes} successful · ${failures} failed`} icon={<GitPullRequest size={18} />} /><Metric label="Success rate" value={runs.length ? `${Math.round((successes / runs.length) * 100)}%` : "—"} detail="based on loaded runs" icon={<CheckCircle2 size={18} />} tone="success" /><Metric label="Median runtime" value={formatDuration(median)} detail="from GitHub run timestamps" icon={<Clock3 size={18} />} /><Metric label="Cache hit rate" value="—" detail="requires Black Box cache events" icon={<Database size={18} />} /></div><div className="insight-list">{failedRuns.length ? failedRuns.map((run) => <Insight key={run.id} title={`${run.title || run.name} failed`} detail={`${run.repo} · ${run.branch} · ${formatAge(run.updatedAt)}`} status="Open run" href={run.htmlUrl} />) : <EmptyState title="No failed runs in the loaded window" detail="Black Box will show evidence-backed failure patterns when the API returns them." />}</div></section>; }
+function StorageView({ host }: { host: DashboardPayload["host"] }) { const used = host ? Math.max(0, Math.min(100, 100 - (host.diskFreeBytes / host.diskTotalBytes) * 100)) : 0; return <section className="overview-page"><div className="page-heading"><div><span className="eyebrow">Local state</span><h2>Storage</h2><p>Host disk telemetry is real. Per-cache inventory remains unavailable until the agent reports BuildKit and package-store ownership.</p></div><button className="button button-quiet" disabled><SlidersHorizontal size={15} aria-hidden="true" /> Policy later</button></div><div className="storage-layout"><div className="storage-meter"><div className={`meter-ring ${host ? "" : "unavailable-ring"}`} style={host ? { background: `conic-gradient(var(--cyan) 0 ${used}%,#253236 ${used}% 100%)` } : undefined}><strong>{host ? `${Math.round(used)}%` : "—"}</strong><span>{host ? "used" : "not reported"}</span></div><span>{host ? `${formatBytes(host.diskFreeBytes)} available` : "Host storage telemetry is unavailable"}</span></div><div className="storage-list"><StorageRow icon={<Database size={17} />} label="BuildKit layers" value="—" detail="Cache inventory not reported" /><StorageRow icon={<Archive size={17} />} label="Actions cache" value="—" detail="Cache inventory not reported" /><StorageRow icon={<GitBranch size={17} />} label="Package stores" value="—" detail="Cache inventory not reported" /><StorageRow icon={<HardDrive size={17} />} label="Runner filesystem" value={host ? formatBytes(host.diskTotalBytes) : "—"} detail={host ? "total host filesystem" : "Awaiting local agent"} /></div></div></section>; }
+function Metric({ label, value, detail, icon, tone }: { label: string; value: string; detail: string; icon: ReactNode; tone?: "success" }) { return <article className="metric-card"><div className="metric-icon">{icon}</div><span className="metric-label">{label}</span><strong className={tone === "success" ? "success-text" : ""}>{value}</strong><small>{detail}</small></article>; }
+function Insight({ title, detail, status, href }: { title: string; detail: string; status: string; href?: string }) { return <article className="insight-row"><div className="insight-icon"><CircleAlert size={16} /></div><div><strong>{title}</strong><span>{detail}</span></div>{href ? <a className="button button-quiet" href={href} target="_blank" rel="noreferrer">{status} <ChevronRight size={14} /></a> : <button className="button button-quiet">{status} <ChevronRight size={14} /></button>}</article>; }
+function StorageRow({ icon, label, value, detail }: { icon: ReactNode; label: string; value: string; detail: string }) { return <div className="storage-row"><span className="storage-icon">{icon}</span><div><strong>{label}</strong><span>{detail}</span></div><b>{value}</b></div>; }
+function EmptyState({ title, detail }: { title: string; detail: string }) { return <div className="empty-state"><strong>{title}</strong><span>{detail}</span></div>; }

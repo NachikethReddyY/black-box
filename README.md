@@ -48,6 +48,8 @@ The App is restricted to AMR-Fan-App, the Worker secrets are stored in Cloudflar
 
 Worker URL: `https://blackbox-worker-dispatcher.ynrdevs.workers.dev`
 
+The Worker now serves the dashboard at the same URL. GitHub OAuth remains gated until the App client secret and a separate dashboard session secret are configured. The dashboard can load live repositories, workflow runs, jobs, and bounded job logs; host CPU, memory, disk, and Docker readiness appear only after the optional WSL telemetry timer is enabled. See `dashboard/README.md` and `runner/SETUP.md`.
+
 Start with the relevant guide:
 
 ```text

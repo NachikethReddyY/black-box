@@ -100,9 +100,43 @@ These commands act only when you invoke them explicitly:
 
 This skeleton does not claim Windows service support. If you need automatic startup, follow the current GitHub and WSL2 guidance and test that separately.
 
+## 6. Optional host telemetry
+
+The dashboard's Runners and Storage views can show measured WSL values when the telemetry agent is enabled. It sends only CPU, memory, disk, Docker readiness, hostname, and runner identifiers to the Black Box Worker. It does not send source files, logs, environment variables, or credentials.
+
+Create a protected environment file inside Ubuntu:
+
+```bash
+install -d -m 700 "$HOME/.config/black-box"
+cat >"$HOME/.config/black-box/telemetry.env" <<'EOF'
+BLACKBOX_URL=https://blackbox-worker-dispatcher.ynrdevs.workers.dev
+BLACKBOX_HOST_AGENT_TOKEN=<paste-the-worker-secret-here>
+BLACKBOX_HOST_ID=black-box-vbook
+BLACKBOX_RUNNER_NAME=black-box-vbook
+BLACKBOX_STATE_ROOT="$HOME/.local/share/black-box-runner"
+EOF
+chmod 600 "$HOME/.config/black-box/telemetry.env"
+```
+
+Run one sample from the repository checkout:
+
+```bash
+python3 runner/scripts/telemetry.py
+```
+
+For a user-level timer, copy the service and timer files to `~/.config/systemd/user`, change the service's `ExecStart` to the absolute path of this checkout, then run:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now black-box-telemetry.timer
+systemctl --user status black-box-telemetry.timer
+```
+
+If WSL is stopped, telemetry becomes stale. The dashboard reports that state instead of treating the runner as ready.
+
 `start.sh` requires both `$HOME/actions-runner/.runner` and `$HOME/actions-runner/.credentials` after registration. It also exports `$HOME/.local/bin` for the pinned tools, enables the runner's documented manual signal trap for this explicit session, and checks that `run.sh` remains alive briefly before reporting success.
 
-## 6. Clean job-owned transient state
+## 7. Clean job-owned transient state
 
 The cleanup script is a dry run unless `--apply` is supplied:
 
