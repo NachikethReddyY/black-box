@@ -7,6 +7,7 @@ worker/.env*
 runner/.state/
 runner/cache/
 runner/work/
+dashboard/dist/
 
 .wrangler-test/
 __pycache__/

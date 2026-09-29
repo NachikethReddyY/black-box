@@ -36,3 +36,15 @@ Live acceptance gates, not yet performed:
 External publication is authorized for this thread: create a private GitHub repository, push checkpoint commits to `main`, and deploy the Cloudflare Worker/D1 shell. The deliberate AMR workflow test, fallback enablement, and PC-off recovery test remain owner-controlled gates.
 
 Publication evidence: private repository `https://github.com/NachikethReddyY/black-box-ci`; Worker `https://blackbox-worker-dispatcher.ynrdevs.workers.dev`; D1 migration applied. Production credentials remain in Cloudflare secrets and local protected files only. No secret value is committed.
+
+## Dashboard surface (thread 33c33e5f, 29 September 2026)
+
+- [x] Choose a dashboard information hierarchy from static mocks and the supplied Blacksmith reference.
+- [x] Build the selected frontend shell and responsive navigation.
+- [x] Generate and wire an original Black Box mark.
+- [x] Use `ynrlib/icons` for the dashboard icon family.
+- [ ] Add private GitHub OAuth session endpoints without exposing tokens to the browser.
+- [ ] Add repository, workflow, run, job, log, and usage views backed by GitHub APIs.
+- [ ] Add authenticated WSL host metrics ingestion and resource view.
+- [x] Verify the dashboard shell, Run History, Logs, Runners, search, responsive layout, and production build in a browser.
+- [ ] Document and implement the OAuth credential gate.
