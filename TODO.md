@@ -56,6 +56,6 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [x] Add cache explanations with explicit `reused`, `rebuilt`, `downloaded`, `evicted`, or `unknown` reasons and bounded retention.
 - [x] Add JUnit ingestion with stable test identities, attempts, durations, and failure signatures.
 - [ ] Add execution manifests and `bb reproduce` only after a clean-workspace boundary is available.
-- [ ] Add `bb doctor`, WSL resource admission, draining mode, and startup cleanup checks.
+- [x] Add a read-only runner doctor and retain startup cleanup checks. WSL resource admission and draining mode still need live runner integration.
 - [ ] Add evidence-backed PR summaries and diagnostic actions before AI suggestions.
 - [ ] Add reviewed AI explanations and patches only after logs, diffs, and test reports are redacted and bounded.

@@ -170,6 +170,16 @@ python3 runner/scripts/history.py prune --max-log-rows 50000 --max-test-rows 500
 
 The importer redacts common GitHub tokens and bearer values, truncates each log at 2 MiB, and keeps test attempts separate. Redaction reduces exposure; it is not proof that arbitrary output contains no secret. Do not copy the SQLite database into the repository or attach it to a public issue.
 
+## 9. Diagnose the host before a real run
+
+Run the read-only doctor after WSL starts and before asking GitHub to queue work:
+
+```bash
+./scripts/doctor.sh
+```
+
+It checks the Linux/WSL marker, runner-owned paths, registration files, Docker reachability, disk headroom, current Linux memory, the cgroup memory limit, and the runner process. It returns a nonzero status for blocking issues. It does not install packages, start the runner, remove containers, change WSL limits, or contact GitHub. A warning is diagnostic evidence, not a performance guarantee.
+
 ## Validation on a non-Windows host
 
 From this directory:
