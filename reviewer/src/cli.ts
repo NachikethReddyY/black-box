@@ -157,6 +157,7 @@ async function prReview(): Promise<void> {
   store.markPublication(result.reviewId, publication ? 'published' : 'not_published');
   store.close();
   console.log(JSON.stringify({ repository: `${owner}/${repo}`, pullRequest: number, reviewId: result.reviewId, outcome: result.outcome, snapshotId: snapshot.id, files: snapshot.files.length, changedPaths: snapshot.changedPaths, report: reports, publication: publication ? { mode: 'pr_review', ...publication, comments: payload.comments.length } : { mode: 'not_published', comments: payload.comments.length } }, null, 2));
+  if (result.outcome !== 'completed_clean' && result.outcome !== 'completed_findings') process.exitCode = 3;
 }
 
 function providerFor(config: ReturnType<typeof configFromEnv>) {

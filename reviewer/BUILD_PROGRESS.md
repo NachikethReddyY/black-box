@@ -22,8 +22,8 @@
 
 ## Verification limits recorded
 
-- [ ] Run one bounded live model review after the provider key is accepted.
-- [ ] Run one bounded PR COMMENT publication on an authorized test PR.
+- [x] Run one bounded live PR attempt; provider rejected the configured key before any model attempt or charge.
+- [ ] Run one bounded PR COMMENT publication after a valid provider key is available.
 - [x] Recorded that OrbStack/WSL2 deployment could not be verified from this host because the advertised VM address was unreachable.
 - [x] Wrote `BUILD_REPORT.md` with exact commands, results, and remaining limitations.
 - [x] Create and link the requested draft PR after the final checkpoint commit.
