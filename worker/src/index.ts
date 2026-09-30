@@ -6,6 +6,7 @@ import { verifyGitHubSignature } from './signature';
 import type { DispatchRequest, WorkerEnv } from './types';
 import { handleDashboardRequest } from './dashboard';
 import { handleHostTelemetry } from './host';
+import { manualRequest } from './manual';
 const json = (body: unknown, status: number) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 const login = (value: unknown) => typeof value === 'string' ? value.toLowerCase() : '';
 async function bodyText(request: Request) {
@@ -70,6 +71,25 @@ export async function scheduled(cron: string, time: number, env: WorkerEnv) {
   }
   await tick({store,github,config,now:Date.now});
 }
+export async function handleOperatorRequest(request: Request, env: WorkerEnv): Promise<Response> {
+  const path = new URL(request.url).pathname;
+  if (path !== '/requests' || request.method !== 'POST') return json({ error: 'not_found' }, 404);
+  if (!env.OPERATOR_TOKEN || request.headers.get('Authorization') !== `Bearer ${env.OPERATOR_TOKEN}`) return json({ error: 'unauthorized' }, 401);
+  let body: unknown;
+  try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
+  try {
+    const config = configFromEnv(env);
+    const row = manualRequest(body, config, 'operator', crypto.randomUUID(), Date.now());
+    const store = new D1RequestStore(env.DB);
+    const state = await store.insertPending(row, Date.now());
+    const saved = state === 'duplicate' ? await store.findByEvent(row.eventId) : row;
+    return json({ status: state, request_id: saved?.requestId }, 202);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'invalid_request';
+    const status = message === 'repository_not_allowed' ? 403 : 400;
+    return json({ error: message }, status);
+  }
+}
 const worker: ExportedHandler<WorkerEnv> = {
   async fetch(request,env) {
     const path = new URL(request.url).pathname;
@@ -77,6 +97,7 @@ const worker: ExportedHandler<WorkerEnv> = {
     const dashboardResponse = await handleDashboardRequest(request, env);
     if (dashboardResponse) return dashboardResponse;
     if (path === '/webhook') return handleWebhook(request,env);
+    if (path === '/requests' && request.method === 'POST') return handleOperatorRequest(request, env);
     if (!env.OPERATOR_TOKEN || request.headers.get('Authorization') !== `Bearer ${env.OPERATOR_TOKEN}`) {
       if (env.ASSETS && request.method === 'GET') return env.ASSETS.fetch(request);
       return json({error:'not_found'},404);

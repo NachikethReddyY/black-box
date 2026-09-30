@@ -52,6 +52,8 @@ The Worker now serves the dashboard at the same URL. GitHub OAuth remains gated 
 
 The runner also has a local history store for bounded, redacted logs, JUnit test attempts, and cache explanations. It uses SQLite and FTS5, keeps evidence outside the repository, and supports explicit retention with `runner/scripts/history.py`. This is an agent-side foundation; the dashboard does not invent cache hits or detailed history until the WSL agent reports them.
 
+The first agent-facing CLI slice is available at `runner/bin/bb`. It queues an exact commit through the authenticated Worker, watches the durable request, returns structured JSON, and supports controlled retries. It does not yet fetch detailed logs or generate AI fixes.
+
 Start with the relevant guide:
 
 ```text

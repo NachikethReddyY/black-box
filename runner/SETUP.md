@@ -100,6 +100,33 @@ These commands act only when you invoke them explicitly:
 
 This skeleton does not claim Windows service support. If you need automatic startup, follow the current GitHub and WSL2 guidance and test that separately.
 
+## Black Box CLI for agent-triggered runs
+
+The CLI queues the same trusted workflow without opening a pull request. It sends repository metadata and an exact commit SHA to the Worker. The Worker stores a durable manual request, and the existing reconciliation schedule dispatches it to the home runner.
+
+Keep the operator token outside the checkout. In Ubuntu, create `~/.config/black-box/operator.env` with mode `600`:
+
+```bash
+install -d -m 700 "$HOME/.config/black-box"
+cat >"$HOME/.config/black-box/operator.env" <<'EOF'
+export BLACKBOX_URL="https://blackbox-worker-dispatcher.ynrdevs.workers.dev"
+export BLACKBOX_OPERATOR_TOKEN="<paste-the-operator-token-here>"
+EOF
+chmod 600 "$HOME/.config/black-box/operator.env"
+source "$HOME/.config/black-box/operator.env"
+```
+
+Run it from this checkout:
+
+```bash
+runner/bin/bb run --repo NachikethReddy/AMR-Fan-App --workflow black-box-ci.yml --ref main --commit "$(git rev-parse HEAD)" --json
+runner/bin/bb status <REQUEST_ID> --json
+runner/bin/bb watch <REQUEST_ID> --json
+runner/bin/bb rerun <REQUEST_ID> --json
+```
+
+`bb run` returns exit code `0` for a completed successful request, `1` for a completed failed request, and `2` for a pending, superseded, refused, or unreachable request. A manually triggered run is diagnostic until its exact commit and required checks are visible in GitHub. It cannot approve another commit.
+
 ## 6. Optional host telemetry
 
 The dashboard's Runners and Storage views can show measured WSL values when the telemetry agent is enabled. It sends only CPU, memory, disk, Docker readiness, hostname, and runner identifiers to the Black Box Worker. It does not send source files, logs, environment variables, or credentials.

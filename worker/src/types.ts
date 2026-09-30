@@ -31,6 +31,17 @@ export interface DispatchRequest {
   readonly mergeReady: boolean;
   readonly runner: Runner;
 }
+export interface ManualRequestInput {
+  readonly repository: string;
+  readonly sourceRef: string;
+  readonly commitSha: string;
+  readonly headSha?: string;
+  readonly baseSha?: string;
+  readonly prNumber?: string;
+  readonly workflowFile?: string;
+  readonly workflowRef?: string;
+  readonly idempotencyKey?: string;
+}
 export interface RequestRecord extends DispatchRequest {
   readonly state: RequestState;
   readonly attemptCount: number;

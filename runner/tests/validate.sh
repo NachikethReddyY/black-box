@@ -7,6 +7,7 @@ failures=0
 pass() { printf 'ok: %s\n' "$*"; }
 fail_check() { printf 'fail: %s\n' "$*" >&2; failures=$((failures + 1)); }
 for file in "$RUNNER_DIR/SETUP.md" "$RUNNER_DIR/TAILSCALE.md" "$RUNNER_DIR/config/runner.env.example"; do if [[ -f "$file" ]]; then pass "$(basename "$file") exists"; else fail_check "$(basename "$file") missing"; fi; done
+if [[ -x "$RUNNER_DIR/bin/bb" ]] && python3 "$RUNNER_DIR/scripts/bb.py" --help >/dev/null; then pass 'bb CLI is executable'; else fail_check 'bb CLI is not runnable'; fi
 for script in "$RUNNER_DIR"/scripts/*.sh "$SCRIPT_DIR/validate.sh"; do if [[ -x "$script" ]]; then pass "$(basename "$script") executable"; else fail_check "$(basename "$script") not executable"; fi; if bash -n "$script"; then pass "$(basename "$script") parses"; else fail_check "$(basename "$script") syntax error"; fi; done
 if grep -q '\\"' "$RUNNER_DIR/scripts/start-wsl.ps1" || ! grep -q 'A-Za-z0-9_./-' "$RUNNER_DIR/scripts/start-wsl.ps1"; then
   fail_check 'PowerShell path validation does not use the literal whitelist'
