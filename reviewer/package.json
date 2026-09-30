@@ -11,6 +11,7 @@
     "doctor": "tsx src/cli.ts doctor",
     "review": "tsx src/cli.ts review",
     "pr-preview": "tsx src/cli.ts pr-preview",
+    "pr-review": "tsx src/cli.ts pr-review",
     "status": "tsx src/cli.ts status",
     "serve": "tsx src/cli.ts serve",
     "backup": "tsx src/cli.ts backup",
