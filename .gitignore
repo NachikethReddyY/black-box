@@ -17,3 +17,4 @@ __pycache__/
 *.pyc
 worker/wrangler.local.toml
 worker/.env
+!worker/.env.example

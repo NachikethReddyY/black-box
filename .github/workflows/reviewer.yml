@@ -31,6 +31,6 @@ jobs:
           node-version: 24
           cache: pnpm
           cache-dependency-path: reviewer/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm typecheck
       - run: pnpm test
