@@ -2,7 +2,7 @@
   "date": "2026-09-30",
   "repository": "NachikethReddyY/black-box",
   "pullRequest": 1,
-  "reviewedHead": "b33807f6091b4893cccf106d551416fdfd73473d",
+  "reviewedHead": "8531e38d8a788cb6ca6c4f2d561344cffb1b4a6d",
   "providerRoute": "tokenrouter-responses",
   "providerBaseUrl": "https://api.tokenrouter.com/v1",
   "model": "openai/gpt-5.6-luna",
@@ -17,18 +17,27 @@
       "inlineComments": 0
     },
     {
-      "reviewId": null,
+      "reviewId": "github-review-5360379234",
       "attempts": 3,
       "estimatedCostUsd": 0.006708,
       "outcome": "completed_findings (publication record retained by GitHub)",
       "publicationReviewId": 5360379234,
       "inlineComments": 2
+    },
+    {
+      "reviewId": "review_5aa2419fdf8f58a7f0b6",
+      "attempts": 3,
+      "estimatedCostUsd": 0.006963,
+      "outcome": "completed_clean",
+      "publicationReviewId": 5360477092,
+      "inlineComments": 0,
+      "reviewedHead": "8531e38d8a788cb6ca6c4f2d561344cffb1b4a6d"
     }
   ],
   "limits": [
     "The key value is intentionally omitted.",
     "Each invocation remained below the configured 0.10 USD per-PR ceiling.",
-    "The two invocations reviewed the same exact head; the second was started while the first bounded shell wait was still completing.",
+    "Two earlier invocations reviewed the previous exact head; the final invocation reviewed the current head after the fixes.",
     "Coverage was partial because the initial context packet is bounded."
   ]
 }

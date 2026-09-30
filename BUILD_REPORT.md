@@ -42,7 +42,7 @@ If `LUNA_API_KEY` is present, the default route is TokenRouter's OpenAI-compatib
 
 ## AI and cost status
 
-The configured route is TokenRouter at `https://api.tokenrouter.com/v1` using `openai/gpt-5.6-luna`. The account authenticated successfully, the model list exposed that route, and the bounded PR run used three attempts and recorded an estimated `$0.006497` inference cost. It published a GitHub `COMMENT` review for the exact head with no supported findings on the clean rerun. A concurrent duplicate invocation also completed against the same head at an estimated `$0.006708`; both runs stayed below the `$0.10` per-run ceiling. No PR description or issue comment was changed.
+The configured route is TokenRouter at `https://api.tokenrouter.com/v1` using `openai/gpt-5.6-luna`. The account authenticated successfully and the model list exposed that route. Earlier bounded runs on the previous head recorded `$0.006497` and `$0.006708` estimates, with one run publishing two changed-line comments. After those fixes, the final head `8531e38d8a788cb6ca6c4f2d561344cffb1b4a6d` ran three attempts, recorded `$0.006963`, and published a clean GitHub `COMMENT` review. Every run stayed below the `$0.10` per-run ceiling. No PR description or issue comment was changed.
 
 The offline evaluation is an engineering smoke test, not a quality benchmark. It has one clean control and one seeded bug fixture. It does not establish precision, recall, latency, or model quality on real pull requests.
 
