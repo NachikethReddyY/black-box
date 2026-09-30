@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/home/vbook/BlackBox/reviewer-service/reviewer
 EnvironmentFile=/home/vbook/BlackBox/reviewer-service/.env
+Environment=PATH=/home/vbook/.nvm/versions/node/v24.18.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=/home/vbook/.nvm/versions/node/v24.18.0/bin/pnpm run watch
 Restart=on-failure
 RestartSec=15
