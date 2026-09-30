@@ -4,7 +4,7 @@ Date: 2026-09-29
 
 1. The persistent service runs on the Windows PC through WSL2. Active SQLite and snapshot data stays on the Linux filesystem.
 2. `economy_cloud_luna_v1` uses Responses API with medium reasoning, JSON schema output, and server-built packets. Tools remain disabled in P1.
-3. TokenRouter is a separate selectable route. A present TokenRouter key never causes automatic provider selection.
+3. TokenRouter is the default route for a present `LUNA_API_KEY` or `TOKENROUTER_API_KEY`; `TOKENROUTER_BASE_URL` and `TOKENROUTER_MODEL_ID` can select the account's exact gateway/model. Automatic scheduled triggers remain disabled.
 4. A present `LUNA_API_KEY` selects the Luna route automatically. Each PR review reserves at most $0.10. No larger budget is accepted without an explicit override.
 5. A working-tree or staged snapshot gets a content-derived `snapshot_id`; Git HEAD alone is insufficient.
 6. Application code owns finding IDs and provenance. A model cannot claim runtime evidence, deterministic proof, or publication authority.

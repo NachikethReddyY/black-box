@@ -139,7 +139,7 @@ async function prReview(): Promise<void> {
   const number = Number(numberText);
   if (!owner || !repo || !Number.isSafeInteger(number) || number < 1) throw new Error('usage: reviewer pr-review OWNER REPO NUMBER');
   const config = configFromEnv();
-  if (config.profile === 'static_only') throw new Error('pr-review requires LUNA_API_KEY; set REVIEWER_LOCAL_ONLY=true only for local static review');
+  if (config.profile === 'static_only') throw new Error('pr-review requires a TokenRouter key; set REVIEWER_LOCAL_ONLY=true only for local static review');
   const authToken = githubToken(config.githubToken);
   if (!authToken) throw new Error('pr-review requires explicit GITHUB_TOKEN for PR comments');
   const api = new GitHubApi(authToken);

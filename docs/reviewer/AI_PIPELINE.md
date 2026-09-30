@@ -21,7 +21,7 @@ Before context selection, a secret scanner inspects all relevant changed and ref
 - `coverage` (P2): favor recall and allow more private/agent-triage candidates, with a configured publication threshold.
 - `precision` (P2): reserve more verification and publish fewer, higher-confidence human-facing findings.
 
-The default cloud route is explicit rather than inferred:
+The default cloud route is selected by a configured TokenRouter key and admitted only when the owner invokes a review command:
 
 ```yaml
 profile: economy_cloud_tokenrouter_luna_v1
