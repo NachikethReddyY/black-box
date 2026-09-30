@@ -50,6 +50,7 @@ export async function runReview(config: ReviewConfig, snapshot: Snapshot, packet
     if (candidates.length > 0) {
       const response = await attempt(provider, store, reviewId, 'verifier', { role: 'verifier', snapshotId: snapshot.id, packet, candidates, requestId: `${reviewId}:verifier:0`, maxOutputTokens: config.maxOutputTokens }, maxCostCents / config.maxAttempts);
       attempts += 1;
+      estimatedCostUsd += cost(response.inputTokens, response.outputTokens, provider);
       verifications = validateVerificationSet(candidates, response.verifications ?? []);
     }
     const findings = makeFindings(candidates, verifications, snapshot);

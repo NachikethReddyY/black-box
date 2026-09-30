@@ -16,6 +16,8 @@ Custom rules and knowledge-base files are versioned operational data. On startup
 
 The agent-mode CLI and read-only API/MCP contract should expose only finding status, evidence references, validated context, export, and suggested-fix text. Test each client integration against a credential-free fixture. Do not give an agent the publisher token, model key, shell, arbitrary URL fetch, rule-write path, or ability to resolve its own finding.
 
+The installed `BB CoPilot Bot` App currently has `metadata: read`, `contents: read`, and `pull_requests: write` on the selected repository. That is sufficient for snapshots and COMMENT reviews, but not for squash merging. Keep automatic merge disabled until the App installation is explicitly granted the minimum repository contents write permission and the permission change is verified with a fresh installation token. Treat that permission expansion as a separate security approval.
+
 The model registry is operational configuration, not prompt text. For each candidate record the provider/model identity, version, role eligibility, context/output limits, structured-output and tool support, usage-reporting behavior, licensing, price source/effective time, local hardware requirements, and last replay result. A model replacement is admitted only after a held-out comparison and a review of its disclosure and provider terms. Keep primary, verifier, and escalation reservations visible by role; a provider outage or stale price disables that role and leaves the run incomplete or awaiting budget.
 
 ## Check Run Agent operations

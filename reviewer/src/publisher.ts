@@ -12,7 +12,7 @@ export function buildReviewPreview(result: ReviewResult, changedLines?: Readonly
     if (!ref) return [];
     const allowedLines = changedLines?.get(ref.path);
     if (allowedLines && !allowedLines.has(ref.start)) return [];
-    return [{ path: ref.path, line: ref.start, side: ref.side, body: commentBody(finding.findingId, finding.candidate.title, finding.candidate.impact, finding.verification.reason) }];
+    return [{ path: ref.path, line: ref.start, side: ref.side, body: commentBody(finding) }];
   });
   return { commit_id: head, event: 'COMMENT', body: summaryBody(result), comments };
 }
@@ -22,9 +22,13 @@ function summaryBody(result: ReviewResult): string {
   return [`## ${headline}`, '', `Revision: \`${result.snapshot.headSha ?? result.snapshot.id}\``, `Coverage: ${result.coverage.complete ? 'complete' : 'partial'}`, `Attempts: ${result.attempts}`, `Estimated cost: $${result.estimatedCostUsd.toFixed(6)}`, result.error ? `Status: ${result.error}` : ''].filter(Boolean).join('\n');
 }
 
-function commentBody(findingId: string, title: string, impact: string, verification: string): string {
-  return `**Finding:** ${title}\n\n**Impact:** ${impact}\n\n**Verification:** ${verification}\n\n<!-- BlackBox finding: ${findingId} -->`;
+function commentBody(finding: ReviewResult['findings'][number]): string {
+  const candidate = finding.candidate;
+  const additionalLocations = [...new Set(candidate.evidence.map((evidence) => `${evidence.path}:${evidence.start}`).filter((location) => !location.startsWith(`${candidate.causalChangeRef[0]?.path ?? ''}:${candidate.causalChangeRef[0]?.start ?? -1}`)))];
+  return [`**${capitalize(candidate.severity)} severity · ${candidate.category}**`, '', `**Finding:** ${candidate.title}`, '', `**Impact:** ${candidate.impact}`, '', `**Why this matters:** ${candidate.actual}. Expected: ${candidate.expected}.`, '', `**Reviewed by:** ${capitalize(candidate.category)} specialist and skeptical verifier.`, `**Additional locations:** ${additionalLocations.join(', ') || 'None identified.'}`, '', `**Verification:** ${finding.verification.reason}`, '', `<!-- BlackBox finding: ${finding.findingId} -->`].join('\n');
 }
+
+function capitalize(value: string): string { return value.charAt(0).toUpperCase() + value.slice(1); }
 
 export function mergeSummaryBody(existing: string | null, result: ReviewResult): string {
   const body = existing ?? '';

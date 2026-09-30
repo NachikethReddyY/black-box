@@ -226,6 +226,7 @@ test('cloud pipeline uses two specialists and one verifier, then publishes only 
   assert.equal(provider.requests.length, 3);
   assert.equal(provider.requests[2]?.role, 'verifier');
   assert.equal(result.findings[0]?.verification.verificationKind, 'model_assessment');
+  assert.ok(result.estimatedCostUsd > 0);
   store.close();
 });
 
