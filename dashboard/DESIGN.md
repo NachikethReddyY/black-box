@@ -46,4 +46,4 @@ The supplied Blacksmith screens informed the information hierarchy: a slim utili
 
 ## Data boundary
 
-The current dashboard uses representative AMR-Fan-App, black-box-ci, devbox, runner, cache, and log records. The next integration slice will replace these fixture arrays with authenticated Worker endpoints without changing the visible information hierarchy.
+The dashboard reads normalized repositories, workflow runs, jobs, selected job logs, and optional WSL host telemetry from the authenticated Worker. It keeps unavailable values explicit and displays partial GitHub API warnings instead of filling gaps with fixture records. Local cache history and detailed test evidence remain agent-owned until the WSL host reports them.

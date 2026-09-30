@@ -26,10 +26,14 @@ async function processPending(r: RequestRecord, d: OrchestratorDependencies): Pr
     if (fresh.mergeable === false || fresh.mergeCommitSha === null || fresh.mergeable === null) return 'waiting_for_merge_revision';
     await d.store.setMergeRevision(r.requestId,fresh.mergeCommitSha,fresh.baseSha);
     r = { ...r, commitSha: fresh.mergeCommitSha, baseSha: fresh.baseSha, mergeReady: true };
-  } else {
+  } else if (r.sourceEvent === 'push') {
     // Turning the PC on must not run an obsolete backlog of main commits.
     const current = await d.github.getBranchSha(r.repository, r.sourceRef.replace(/^refs\/heads\//, ''));
     if (current !== r.headSha) { await stop(r,d,'superseded','Branch advanced; this queued revision was superseded.'); return 'superseded'; }
+    r = await ensureChecks(r,d);
+  } else {
+    // Manual and diagnostic requests already carry an immutable commit. Do not
+    // replace it merely because the branch advanced while the PC was offline.
     r = await ensureChecks(r,d);
   }
   if (d.now() > r.expiresAt || r.attemptCount >= d.config.maxAttempts) { await stop(r,d,'completed','Request expired or retry limit reached.'); return 'expired'; }

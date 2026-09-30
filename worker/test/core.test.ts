@@ -6,6 +6,7 @@ import { configFromEnv, selectRunner } from "../src/config";
 import { createAppJwt } from "../src/auth";
 import { verifyGitHubSignature, githubSignatureForTests } from "../src/signature";
 import { runnerHasRequiredLabels, workflowDispatchInput } from "../src/github";
+import { manualRequest } from "../src/manual";
 import type { RequestRecord, WorkerEnv } from "../src/types";
 
 Object.defineProperty(globalThis, "crypto", { value: webcrypto, configurable: true });
@@ -80,4 +81,20 @@ test("repository allowlist and event dedupe are durable contracts", async () => 
   const migration = await import("node:fs/promises");
   const sql = await migration.readFile(new URL("../migrations/0001_dispatch.sql", import.meta.url), "utf8");
   assert.match(sql, /event_id TEXT NOT NULL UNIQUE/);
+});
+
+test("manual requests accept exact revisions and reject workflow changes", () => {
+  const config = configFromEnv(env({ GITHUB_WORKFLOW_FILE: "black-box-ci.yml" }));
+  const request = manualRequest({
+    repository: "acme/project",
+    source_ref: "refs/heads/main",
+    commit_sha: "A".repeat(40),
+    idempotency_key: "agent-1",
+  }, config, "operator", "123e4567-e89b-12d3-a456-426614174000", 1);
+  assert.equal(request.sourceEvent, "manual");
+  assert.equal(request.commitSha, "a".repeat(40));
+  assert.equal(request.headSha, request.commitSha);
+  assert.equal(request.eventId, "manual:acme/project:agent-1");
+  assert.throws(() => manualRequest({ ...request, workflow_file: "other.yml" }, config, "operator", crypto.randomUUID(), 1), /workflow_not_allowed/);
+  assert.throws(() => manualRequest({ ...request, repository: "outsider/fork" }, config, "operator", crypto.randomUUID(), 1), /repository_not_allowed/);
 });

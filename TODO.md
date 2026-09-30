@@ -43,11 +43,11 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [x] Build the selected frontend shell and responsive navigation.
 - [x] Generate and wire an original Black Box mark.
 - [x] Use `ynrlib/icons` for the dashboard icon family.
-- [ ] Add private GitHub OAuth session endpoints without exposing tokens to the browser.
-- [ ] Add repository, workflow, run, job, log, and usage views backed by GitHub APIs.
+- [x] Add private GitHub OAuth session endpoints without exposing tokens to the browser.
+- [x] Add repository, workflow, run, job, and bounded log views backed by GitHub APIs.
 - [ ] Add authenticated WSL host metrics ingestion and resource view.
 - [x] Verify the dashboard shell, Run History, Logs, Runners, search, responsive layout, and production build in a browser.
-- [ ] Document and implement the OAuth credential gate.
+- [x] Document and implement the OAuth credential gate.
 
 ## Self-hosted AI reviewer planning (thread current, 29 September 2026)
 
@@ -83,3 +83,16 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [x] Add WSL2 watcher startup instructions and verify the local watcher remains within the per-review budget.
 - [x] Add marker-owned PR summaries and fail-closed CI-gated squash merge policy.
 - [ ] Verify a real non-draft PR with passing checks before allowing an automatic merge.
+- [ ] Set the GitHub App OAuth client secret and dashboard session secret in Cloudflare.
+
+### CI intelligence backlog
+
+- [x] Add an agent-owned SQLite history for structured test reports, cache events, and bounded searchable logs. Job timeline wiring still needs live runner events.
+- [x] Add cache explanations with explicit `reused`, `rebuilt`, `downloaded`, `evicted`, or `unknown` reasons and bounded retention.
+- [x] Add a bounded managed-cache policy with stable builder identities, BuildKit storage limits, package-store inventory, and redacted environment fingerprints. Live BuildKit preparation remains a WSL acceptance gate.
+- [x] Add JUnit ingestion with stable test identities, attempts, durations, and failure signatures.
+- [x] Add bounded execution manifests that exclude secrets. A future `bb reproduce` command still depends on a clean-workspace boundary.
+- [x] Add a read-only runner doctor and retain startup cleanup checks. WSL resource admission and draining mode still need live runner integration.
+- [x] Add bounded run timing records for future step and workflow comparisons. Live runner event ingestion remains pending.
+- [ ] Add evidence-backed PR summaries and diagnostic actions before AI suggestions.
+- [ ] Add reviewed AI explanations and patches only after logs, diffs, and test reports are redacted and bounded.

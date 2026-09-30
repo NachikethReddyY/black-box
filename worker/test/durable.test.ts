@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { URL } from 'node:url';
 import { D1RequestStore } from '../src/db';
-import { handleWebhook } from '../src/index';
+import { handleOperatorRequest, handleWebhook } from '../src/index';
 import { githubSignatureForTests } from '../src/signature';
 import { configFromEnv } from '../src/config';
 import { tick, retryRequest } from '../src/orchestrator';
@@ -66,6 +66,37 @@ test('signed PR persists before acknowledgement and deduplicates after store rec
   assert.equal(saved?.mergeReady, false);
   assert.equal(saved?.sourceRef, 'refs/pull/7/merge');
   assert.equal(saved?.sourceEvent, 'pull_request');
+  f.sqlite.close();
+});
+test('operator endpoint persists a manual request only with its token and deduplicates idempotency keys', async () => {
+  const f = fixture();
+  const env = { ...f.env, OPERATOR_TOKEN: 'operator-secret' } satisfies WorkerEnv;
+  const body = JSON.stringify({ repository: 'acme/project', source_ref: 'refs/heads/main', commit_sha: head, idempotency_key: 'agent-run-1' });
+  const make = (authorization?: string) => handleOperatorRequest(new Request('https://blackbox.test/requests', { method: 'POST', headers: { Authorization: authorization ?? '', 'content-type': 'application/json' }, body }), env);
+  assert.equal((await make()).status, 401);
+  const first = await make('Bearer operator-secret');
+  const second = await make('Bearer operator-secret');
+  assert.equal(first.status, 202);
+  assert.equal(second.status, 202);
+  assert.equal((await first.json() as { status: string }).status, 'created');
+  assert.equal((await second.json() as { status: string }).status, 'duplicate');
+  const saved = await f.store.findByEvent('manual:acme/project:agent-run-1');
+  assert.equal(saved?.sourceEvent, 'manual');
+  assert.equal(saved?.commitSha, head);
+  f.sqlite.close();
+});
+test('manual requests dispatch their pinned SHA without branch freshness checks', async () => {
+  const f = fixture();
+  const row = {
+    requestId: crypto.randomUUID(), eventId: 'manual:acme/project:manual-2', repository: 'acme/project', actor: 'operator', sourceEvent: 'manual' as const,
+    workflowFile: 'black-box-ci.yml', workflowRef: 'main', sourceRef: 'refs/heads/feature', prNumber: '', commitSha: head, headSha: head, baseSha: base,
+    mergeReady: true, runner: 'waiting' as const,
+  };
+  await f.store.insertPending(row, Date.now());
+  f.github.getBranchSha = async () => { throw new Error('manual_requests_must_not_resolve_branch'); };
+  await tick(f.deps);
+  assert.equal(f.dispatches.length, 1);
+  assert.equal(f.dispatches[0].inputs.commit_sha, head);
   f.sqlite.close();
 });
 test('unknown actor and fork code never enter the queue', async () => {

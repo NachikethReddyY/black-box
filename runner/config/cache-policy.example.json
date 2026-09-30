@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "trusted_repo": "NachikethReddyY/AMR-Fan-App",
+  "lineage": "main-linux",
+  "owner_label": "com.blackbox.runner.owner=black-box-ci",
+  "cache_root": "/home/YOUR_USER/.local/share/black-box-runner/cache/AMR-Fan-App",
+  "buildkit": {
+    "size": "5GB",
+    "maxUsedSpace": "20GB",
+    "minFreeSpace": "2GB"
+  },
+  "package_managers": ["pnpm", "npm"]
+}

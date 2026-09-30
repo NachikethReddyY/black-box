@@ -48,6 +48,12 @@ The App is restricted to AMR-Fan-App, the Worker secrets are stored in Cloudflar
 
 Worker URL: `https://blackbox-worker-dispatcher.ynrdevs.workers.dev`
 
+The Worker now serves the dashboard at the same URL. GitHub OAuth remains gated until the App client secret and a separate dashboard session secret are configured. The dashboard can load live repositories, workflow runs, jobs, and bounded job logs; host CPU, memory, disk, and Docker readiness appear only after the optional WSL telemetry timer is enabled. See `dashboard/README.md` and `runner/SETUP.md`.
+
+The runner also has a local history store for bounded, redacted logs, JUnit test attempts, and cache explanations. It uses SQLite and FTS5, keeps evidence outside the repository, and supports explicit retention with `runner/scripts/history.py`. This is an agent-side foundation; the dashboard does not invent cache hits or detailed history until the WSL agent reports them.
+
+The first agent-facing CLI slice is available at `runner/bin/bb`. It queues an exact commit through the authenticated Worker, watches the durable request, returns structured JSON, and supports controlled retries. It does not yet fetch detailed logs or generate AI fixes.
+
 Start with the relevant guide:
 
 ```text

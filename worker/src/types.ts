@@ -31,6 +31,17 @@ export interface DispatchRequest {
   readonly mergeReady: boolean;
   readonly runner: Runner;
 }
+export interface ManualRequestInput {
+  readonly repository: string;
+  readonly sourceRef: string;
+  readonly commitSha: string;
+  readonly headSha?: string;
+  readonly baseSha?: string;
+  readonly prNumber?: string;
+  readonly workflowFile?: string;
+  readonly workflowRef?: string;
+  readonly idempotencyKey?: string;
+}
 export interface RequestRecord extends DispatchRequest {
   readonly state: RequestState;
   readonly attemptCount: number;
@@ -83,6 +94,8 @@ export interface GitHubApi {
 }
 export interface WorkerEnv {
   readonly DB: D1Database;
+  readonly ASSETS?: Fetcher;
+  readonly HOST_AGENT_TOKEN?: string;
   readonly WEBHOOK_SECRET: string;
   readonly OPERATOR_TOKEN?: string;
   readonly TRUSTED_REPOSITORIES: string;
@@ -95,6 +108,10 @@ export interface WorkerEnv {
   readonly GITHUB_APP_ID: string;
   readonly GITHUB_APP_PRIVATE_KEY: string;
   readonly GITHUB_APP_INSTALLATION_ID: string;
+  readonly GITHUB_OAUTH_CLIENT_ID?: string;
+  readonly GITHUB_OAUTH_CLIENT_SECRET?: string;
+  readonly DASHBOARD_SESSION_SECRET?: string;
+  readonly DASHBOARD_ORIGIN?: string;
 }
 export function requiredJobs(request: Pick<DispatchRequest, 'sourceEvent'>): readonly string[] {
   return request.sourceEvent === 'schedule' ? REQUIRED_JOB_NAMES.slice(2) : REQUIRED_JOB_NAMES;

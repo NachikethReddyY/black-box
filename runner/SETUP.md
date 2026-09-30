@@ -100,9 +100,70 @@ These commands act only when you invoke them explicitly:
 
 This skeleton does not claim Windows service support. If you need automatic startup, follow the current GitHub and WSL2 guidance and test that separately.
 
+## Black Box CLI for agent-triggered runs
+
+The CLI queues the same trusted workflow without opening a pull request. It sends repository metadata and an exact commit SHA to the Worker. The Worker stores a durable manual request, and the existing reconciliation schedule dispatches it to the home runner.
+
+Keep the operator token outside the checkout. In Ubuntu, create `~/.config/black-box/operator.env` with mode `600`:
+
+```bash
+install -d -m 700 "$HOME/.config/black-box"
+cat >"$HOME/.config/black-box/operator.env" <<'EOF'
+export BLACKBOX_URL="https://blackbox-worker-dispatcher.ynrdevs.workers.dev"
+export BLACKBOX_OPERATOR_TOKEN="<paste-the-operator-token-here>"
+EOF
+chmod 600 "$HOME/.config/black-box/operator.env"
+source "$HOME/.config/black-box/operator.env"
+```
+
+Run it from this checkout:
+
+```bash
+runner/bin/bb run --repo NachikethReddy/AMR-Fan-App --workflow black-box-ci.yml --workflow-ref main --ref feature --commit "$(git rev-parse HEAD)" --json
+runner/bin/bb status <REQUEST_ID> --json
+runner/bin/bb watch <REQUEST_ID> --json
+runner/bin/bb rerun <REQUEST_ID> --json
+```
+
+`bb run` returns exit code `0` for a completed successful request, `1` for a completed failed request, and `2` for a pending, superseded, refused, or unreachable request. A manually triggered run is diagnostic until its exact commit and required checks are visible in GitHub. It cannot approve another commit.
+
+## 6. Optional host telemetry
+
+The dashboard's Runners and Storage views can show measured WSL values when the telemetry agent is enabled. It sends only CPU, memory, disk, Docker readiness, hostname, and runner identifiers to the Black Box Worker. It does not send source files, logs, environment variables, or credentials.
+
+Create a protected environment file inside Ubuntu:
+
+```bash
+install -d -m 700 "$HOME/.config/black-box"
+cat >"$HOME/.config/black-box/telemetry.env" <<'EOF'
+BLACKBOX_URL=https://blackbox-worker-dispatcher.ynrdevs.workers.dev
+BLACKBOX_HOST_AGENT_TOKEN=<paste-the-worker-secret-here>
+BLACKBOX_HOST_ID=black-box-vbook
+BLACKBOX_RUNNER_NAME=black-box-vbook
+BLACKBOX_STATE_ROOT="$HOME/.local/share/black-box-runner"
+EOF
+chmod 600 "$HOME/.config/black-box/telemetry.env"
+```
+
+Run one sample from the repository checkout:
+
+```bash
+python3 runner/scripts/telemetry.py
+```
+
+For a user-level timer, copy the service and timer files to `~/.config/systemd/user`, change the service's `ExecStart` to the absolute path of this checkout, then run:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now black-box-telemetry.timer
+systemctl --user status black-box-telemetry.timer
+```
+
+If WSL is stopped, telemetry becomes stale. The dashboard reports that state instead of treating the runner as ready.
+
 `start.sh` requires both `$HOME/actions-runner/.runner` and `$HOME/actions-runner/.credentials` after registration. It also exports `$HOME/.local/bin` for the pinned tools, enables the runner's documented manual signal trap for this explicit session, and checks that `run.sh` remains alive briefly before reporting success.
 
-## 6. Clean job-owned transient state
+## 7. Clean job-owned transient state
 
 The cleanup script is a dry run unless `--apply` is supplied:
 
@@ -112,6 +173,62 @@ The cleanup script is a dry run unless `--apply` is supplied:
 ```
 
 It can remove only direct children of `$HOME/.local/share/black-box-runner/state/transient`. `start.sh` runs cleanup before `run.sh` accepts jobs. With Docker required, startup also removes only containers and volumes bearing `com.blackbox.runner.owner=black-box-ci`. The CI job template must apply that exact Docker label when creating temporary containers and volumes. Unlabeled or differently labeled Docker resources remain untouched. It refuses mounted-Windows paths, symlinks, root-like paths, and any other state directory. It refuses cleanup while the runner is live. It does not remove the runner installation, cache, workspace, logs, PID file, GitHub registration, Docker images, or build cache. It never runs a global Docker prune.
+
+## 8. Keep local CI history and cache evidence
+
+The local history tool stores bounded, redacted evidence outside the repository. It uses SQLite with a searchable log index, so it still works when the Worker or the PC is offline. A cache event records an outcome and a reason. It does not claim a cache hit when the runner did not measure one.
+
+Initialize the store, then ingest reports from a completed job:
+
+```bash
+python3 runner/scripts/history.py init
+python3 runner/scripts/history.py record-run --run-id <run-id> --repo <owner/repo> --workflow CI --job test --commit <40-char-sha> --outcome passed --duration-ms 1250 --runner black-box-vbook
+python3 runner/scripts/history.py ingest-log --run-id <run-id> --repo <owner/repo> /path/to/job.log
+python3 runner/scripts/history.py ingest-junit --run-id <run-id> --repo <owner/repo> --attempt 1 /path/to/junit.xml
+python3 runner/scripts/history.py cache --run-id <run-id> --kind docker --key <image-lineage> --outcome reused --reason 'unchanged Dockerfile'
+python3 runner/scripts/history.py manifest --run-id <run-id> --repo <owner/repo> --workflow CI --job test --commit <40-char-sha> --command 'pnpm test' --workdir "$PWD" --environment-fingerprint <64-char-sha256> --lockfile-hash <64-char-sha256> --service 'postgres@sha256:<digest>' --test-selection 'tests/auth.test.ts'
+python3 runner/scripts/history.py search 'Connection refused'
+python3 runner/scripts/history.py doctor
+```
+
+Use `reused`, `rebuilt`, `downloaded`, `evicted`, or `unknown` for cache outcomes. The correctness contract is simple: deleting all cache state may make a job slower, but it must not change whether the code passes. Keep detailed logs and traces on the host only as long as the retention policy allows:
+
+```bash
+python3 runner/scripts/history.py prune --max-log-rows 50000 --max-test-rows 50000 --max-cache-rows 50000
+```
+
+The importer redacts common GitHub tokens and bearer values, truncates each log at 2 MiB, and keeps test attempts separate. Redaction reduces exposure; it is not proof that arbitrary output contains no secret. Do not copy the SQLite database into the repository or attach it to a public issue.
+
+An execution manifest is a replay description, not a copied runner environment. It records the tested revision, command, workspace, lockfile and environment fingerprints, service-image references, and test selection. It rejects secret-like assignments and never stores environment variables, credentials, or temporary files. A future `bb reproduce` command can use it to create a clean workspace; this version only records the evidence.
+
+## 9. Inspect a managed cache policy
+
+The cache helper gives a trusted repository and Docker image lineage a stable identity. It prepares a named BuildKit `docker-container` builder and records the storage limits that BuildKit should enforce. It does not run Docker, remove cache data, or infer a cache hit from a directory listing unless you explicitly request the operation.
+
+Start from the example and replace `YOUR_USER` with the WSL username:
+
+```bash
+cp config/cache-policy.example.json config/cache-policy.json
+chmod 600 config/cache-policy.json
+python3 scripts/cache.py --config config/cache-policy.json inspect
+python3 scripts/cache.py --config config/cache-policy.json prepare
+python3 scripts/cache.py --config config/cache-policy.json inventory
+python3 scripts/cache.py --config config/cache-policy.json manifest
+```
+
+The `prepare` command is a dry run. `prepare --apply` is the explicit operator action that creates the owned cache directory and invokes `docker buildx create`. It refuses mounted-Windows paths, ambiguous ownership markers, unsupported labels, and disabled policies. The cache helper never runs `docker system prune`; BuildKit's configured garbage collection owns its cache budget.
+
+The policy is intentionally scoped to a trusted repository and image lineage. Do not point it at a public or fork-controlled workflow, and do not commit `cache-policy.json` if it contains a private path or local policy. A cold cache may make a job slower, but deleting cache state must not change whether the job passes.
+
+## 10. Diagnose the host before a real run
+
+Run the read-only doctor after WSL starts and before asking GitHub to queue work:
+
+```bash
+./scripts/doctor.sh
+```
+
+It checks the Linux/WSL marker, runner-owned paths, registration files, Docker reachability, disk headroom, current Linux memory, the cgroup memory limit, and the runner process. It returns a nonzero status for blocking issues. It does not install packages, start the runner, remove containers, change WSL limits, or contact GitHub. A warning is diagnostic evidence, not a performance guarantee.
 
 ## Validation on a non-Windows host
 

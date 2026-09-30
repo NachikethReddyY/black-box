@@ -1,0 +1,12 @@
+[Unit]
+Description=Black Box host telemetry
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/black-box/telemetry.env
+ExecStart=/usr/bin/python3 %h/BlackBox/runner/scripts/telemetry.py
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
