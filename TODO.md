@@ -82,7 +82,7 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [x] Add restart, draft filtering, duplicate, and head-change tests without live model calls.
 - [x] Add WSL2 watcher startup instructions and verify the local watcher remains within the per-review budget.
 - [x] Add marker-owned PR summaries and fail-closed CI-gated squash merge policy.
-- [ ] Verify a real non-draft PR with passing checks before allowing an automatic merge.
+- [x] Exercise a real non-draft PR with passing checks; keep automatic merge blocked when the exact head has findings or partial coverage.
 - [ ] Set the GitHub App OAuth client secret and dashboard session secret in Cloudflare.
 
 ### CI intelligence backlog
