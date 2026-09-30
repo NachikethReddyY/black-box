@@ -122,7 +122,7 @@ export class AutomaticReviewer {
     const record = this.#store.getAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha);
     if (!record || record.status !== 'completed' || !record.reviewId) return false;
     const result = this.#store.getReview(record.reviewId);
-    if (!result || result.outcome !== 'completed_clean') return false;
+    if (!result || !mergeEligible(result)) return false;
     const pr = await this.#client.getPullRequest(pullRequest.ref);
     if (pr.state !== 'open' || pr.draft || pr.headSha !== pullRequest.headSha) return false;
     if (this.#config.updatePullRequestDescription && !summaryCoversHead(pr.body, pullRequest.headSha)) {
@@ -136,6 +136,12 @@ export class AutomaticReviewer {
     this.#store.markAutomaticMerged(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha);
     return true;
   }
+}
+
+function mergeEligible(result: ReviewResult): boolean {
+  return result.outcome === 'completed_clean'
+    && result.coverage.complete
+    && result.verifications.every((verification) => verification.decision === 'supported' || verification.decision === 'rejected');
 }
 
 export async function runAutomaticReview(config: ReviewConfig, snapshot: Snapshot, store: ReviewStore): Promise<ReviewResult> {

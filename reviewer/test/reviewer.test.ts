@@ -181,6 +181,28 @@ test('automatic clean reviews squash merge only after successful CI and clean me
   store.close();
 });
 
+test('automatic merge refuses incomplete coverage even when the model reported clean', async () => {
+  const root = tempRepo();
+  const cfg = config(root, { githubRepositories: [{ owner: 'owner', repo: 'repo' }], autoMerge: true });
+  const snapshot = captureSnapshot(cfg, 'ref', 'HEAD');
+  const client = {
+    async listOpenPullRequests() { return [{ ref: { owner: 'owner', repo: 'repo', number: 1 }, headSha: snapshot.headSha ?? 'head', draft: false, title: 'Ready' }]; },
+    async getPullRequest() { return { headSha: snapshot.headSha ?? 'head', body: null, draft: false, state: 'open' as const, mergeableState: 'clean' }; },
+    async capturePullRequestSnapshot() { return snapshot; },
+    async listPullRequestFiles() { return []; },
+    async publishReview() { return { reviewId: 100 }; },
+    async updatePullRequestBody() {},
+    async getCiStatus() { return { ready: true, pending: false, failed: false, count: 2, details: ['build:success', 'test:success'] }; },
+    async mergePullRequest() { throw new Error('must not merge'); },
+  };
+  const store = new ReviewStore(cfg);
+  const result = { reviewId: id('review', 'partial') as ReviewId, snapshot, profile: 'static_only' as const, outcome: 'completed_clean' as const, candidates: [], verifications: [], findings: [], secretFindings: [], coverage: { selectedPaths: [], omittedPaths: ['omitted.ts'], complete: false }, attempts: 0, estimatedCostUsd: 0 };
+  const cycle = await new AutomaticReviewer(cfg, store, client, async () => { store.saveResult(result); store.queuePublication(result.reviewId, snapshot.headSha, {}); return result; }).pollOnce();
+  assert.equal(cycle.merged, 0);
+  assert.equal(cycle.waitingForCi, 1);
+  store.close();
+});
+
 function makeCandidate(): Candidate {
   return { candidateId: 'candidate-1', category: 'correctness', severity: 'high', title: 'returns the wrong value', trigger: 'the changed return path is selected', expected: 'the caller receives the stored value', actual: 'the caller receives a constant', impact: 'caller behavior is incorrect', changeRelevance: 'introduced', causalChangeRef: [{ path: 'index.ts', sha256: 'source', start: 1, end: 1, side: 'RIGHT', reason: 'changed return' }], evidence: [{ path: 'index.ts', sha256: 'source', start: 1, end: 1, side: 'RIGHT', reason: 'changed return' }], verificationKind: 'model_assessment', status: 'candidate' };
 }
