@@ -6,7 +6,7 @@ import test from 'node:test';
 import { configFromEnv, parseDotEnv } from '../src/config.js';
 import { buildContext } from '../src/context.js';
 import { id } from '../src/hash.js';
-import { FakeProvider, OPENAI_ROUTE, ResponsesProvider } from '../src/provider.js';
+import { createResponsesProvider, FakeProvider, OPENAI_ROUTE, ResponsesProvider, TOKENROUTER_ROUTE } from '../src/provider.js';
 import { runReview } from '../src/pipeline.js';
 import { reportMarkdown } from '../src/report.js';
 import { captureSnapshot } from '../src/snapshot.js';
@@ -113,10 +113,37 @@ test('verifier output cannot claim runtime proof or omit a candidate', async () 
   store.close();
 });
 
-test('config selects the bounded Luna route when the key is present', () => {
+test('Luna key selects TokenRouter and is never assigned to the direct OpenAI route', () => {
   const cfg = configFromEnv({ LUNA_API_KEY: 'present', SPAN_API_KEY: 'present' }, '/tmp');
-  assert.equal(cfg.profile, 'economy_cloud_luna_v1');
+  assert.equal(cfg.profile, 'economy_cloud_tokenrouter_luna_v1');
   assert.equal(cfg.cloudBudgetUsd, 0.10);
+  assert.equal(cfg.tokenRouterApiKey, 'present');
+  assert.equal(cfg.openAiApiKey, undefined);
+  const direct = configFromEnv({ LUNA_API_KEY: 'router-key', REVIEWER_PROFILE: 'economy_cloud_luna_v1' }, '/tmp');
+  assert.equal(createResponsesProvider(direct), undefined);
+});
+
+test('TokenRouter Luna uses the configured gateway and keeps local-only mode authoritative', async () => {
+  const cfg = configFromEnv({ LUNA_API_KEY: 'router-key', TOKENROUTER_BASE_URL: 'https://router.test/v1/', TOKENROUTER_MODEL_ID: 'luna-fixture' }, '/tmp');
+  const requests: { url: string; authorization: string | null; body: Record<string, unknown> }[] = [];
+  const fetcher: typeof fetch = async (input, init) => {
+    requests.push({ url: String(input), authorization: new Headers(init?.headers).get('authorization'), body: JSON.parse(String(init?.body)) });
+    return new Response(JSON.stringify({ output_text: JSON.stringify({ candidates: [] }), usage: { input_tokens: 1, output_tokens: 1 } }), { status: 200 });
+  };
+  const provider = createResponsesProvider(cfg, fetcher);
+  assert.ok(provider);
+  const snap = captureSnapshot(config(tempRepo()), 'ref', 'HEAD');
+  await provider.review({ role: 'correctness', snapshotId: snap.id, packet: buildContext(snap, cfg.maxPacketBytes).packet, requestId: 'router-attempt', maxOutputTokens: 4096 });
+  assert.equal(requests[0]?.url, 'https://router.test/v1/responses');
+  assert.equal(requests[0]?.authorization, 'Bearer router-key');
+  assert.equal(requests[0]?.body.model, 'luna-fixture');
+  assert.deepEqual(requests[0]?.body.reasoning, { effort: 'medium' });
+  assert.equal(requests[0]?.body.max_output_tokens, 4096);
+  assert.equal(TOKENROUTER_ROUTE.baseUrl, 'https://api.tokenrouter.com/v1');
+  const local = configFromEnv({ LUNA_API_KEY: 'router-key', REVIEWER_LOCAL_ONLY: 'true', REVIEWER_PROFILE: 'economy_cloud_tokenrouter_luna_v1' }, '/tmp');
+  assert.equal(local.profile, 'static_only');
+  assert.equal(createResponsesProvider(local, fetcher), undefined);
+  assert.throws(() => configFromEnv({ LUNA_API_KEY: 'router-key', TOKENROUTER_BASE_URL: 'http://router.test/v1' }, '/tmp'), /HTTPS/);
 });
 
 test('config discovers the enclosing worktree when invoked from the reviewer package', () => {

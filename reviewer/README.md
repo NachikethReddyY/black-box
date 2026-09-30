@@ -20,11 +20,11 @@ pnpm test
 pnpm typecheck
 ```
 
-When `LUNA_API_KEY` is present, the CLI selects the Luna route and reserves at most `$0.10` for one PR review. Use `REVIEWER_LOCAL_ONLY=true` for a static-only run. `pr-review OWNER REPO NUMBER` captures the exact PR revision, runs the correctness and security specialists plus the verifier, then submits one GitHub `COMMENT` review containing every validated changed-line finding. It never edits the PR description, creates issue comments, or requests changes. The command uses `GITHUB_TOKEN` or the authenticated `gh` CLI session for the PR write.
+When `LUNA_API_KEY` or `TOKENROUTER_API_KEY` is present, the CLI selects the TokenRouter Luna route at `https://api.tokenrouter.com/v1` and reserves at most `$0.10` for one PR review. Use `REVIEWER_LOCAL_ONLY=true` for a static-only run. `pr-review OWNER REPO NUMBER` captures the exact PR revision, runs the correctness and security specialists plus the verifier, then submits one GitHub `COMMENT` review containing every validated changed-line finding. It never edits the PR description, creates issue comments, or requests changes. The command uses `GITHUB_TOKEN` or the authenticated `gh` CLI session for the PR write.
 
 Run the commands from either the repository root with `pnpm --dir reviewer ...` or from `reviewer/` with `pnpm ...`. The CLI discovers the enclosing Git worktree by default. Set `REVIEWER_ROOT` when the repository is elsewhere and `REVIEWER_ENV_FILE` when credentials live outside the default `.env` locations.
 
-Supported profiles are `economy_cloud_luna_v1` for the direct OpenAI Responses API and `economy_cloud_tokenrouter_luna_v1` for an explicitly configured TokenRouter endpoint. Provider keys are read from protected environment configuration. The CLI never prints them. Public PR metadata and archive reads can run without `GITHUB_TOKEN`; `pr-review` requires a write-capable GitHub token.
+Supported profiles are `economy_cloud_tokenrouter_luna_v1` for the configured TokenRouter Responses API and `economy_cloud_luna_v1` for a separately configured direct OpenAI route. Set `TOKENROUTER_BASE_URL` or `TOKENROUTER_MODEL_ID` only when your TokenRouter account requires a different route. Provider keys are read from protected environment configuration. The CLI never prints them. Public PR metadata and archive reads can run without `GITHUB_TOKEN`; `pr-review` requires a write-capable GitHub token.
 
 `serve` binds only to `127.0.0.1`. `/healthz` is unauthenticated for local process checks; `/status` requires `Authorization: Bearer $REVIEWER_STATUS_TOKEN` and returns SQLite integrity plus review metadata. Stop it with `Ctrl-C` or `SIGTERM`. It does not authorize reviews, model spending, repository writes, or GitHub publication.
 

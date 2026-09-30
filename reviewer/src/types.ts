@@ -171,5 +171,7 @@ export interface ReviewConfig {
   readonly cloudBudgetUsd: number;
   readonly openAiApiKey?: string;
   readonly tokenRouterApiKey?: string;
+  readonly tokenRouterBaseUrl?: string;
+  readonly tokenRouterModelId?: string;
   readonly githubToken?: string;
 }

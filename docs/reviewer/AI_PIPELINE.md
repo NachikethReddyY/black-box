@@ -24,7 +24,7 @@ Before context selection, a secret scanner inspects all relevant changed and ref
 The default cloud route is explicit rather than inferred:
 
 ```yaml
-profile: economy_cloud_luna_v1
+profile: economy_cloud_tokenrouter_luna_v1
 default: false
 max_provider_attempts: 4
 specialists: [correctness, security]
@@ -32,22 +32,22 @@ verifier: true
 final_slot: repair_or_follow_up
 routes:
   primary:
-    provider: openai
-    model_id: gpt-6-luna
+    provider: tokenrouter
+    model_id: openai/gpt-5.6-luna
     api_format: responses
     reasoning: medium
     structured_output: json_schema
     tool_mode: server_built_packet
   verifier:
-    provider: openai
-    model_id: gpt-6-luna
+    provider: tokenrouter
+    model_id: openai/gpt-5.6-luna
     api_format: responses
     reasoning: medium
     structured_output: json_schema
     tool_mode: server_built_packet
 ```
 
-`static_only` is the safe installation default. `economy_cloud_luna_v1` is the first executable cloud profile and must be manually selected with a budget. It is deliberately conservative: no model tool calls in P1, no automatic escalation, and no cloud request until local secret scanning and redaction complete. A different-family verifier is an evaluation profile, not an inferred production route.
+`static_only` is the safe installation default when no provider key is configured. With `LUNA_API_KEY` or `TOKENROUTER_API_KEY`, the first executable cloud profile is `economy_cloud_tokenrouter_luna_v1` at `https://api.tokenrouter.com/v1`. It is deliberately conservative: no model tool calls in P1, no automatic escalation, and no cloud request until local secret scanning and redaction complete. A different-family verifier is an evaluation profile, not an inferred production route.
 
 The direct OpenAI route is separate from this optional TokenRouter route:
 
@@ -55,7 +55,7 @@ The direct OpenAI route is separate from this optional TokenRouter route:
 profile: economy_cloud_tokenrouter_luna_v1
 default: false
 provider: tokenrouter
-model_id: openai/gpt-6-luna
+model_id: openai/gpt-5.6-luna
 api_format: responses
 reasoning: medium
 structured_output: json_schema

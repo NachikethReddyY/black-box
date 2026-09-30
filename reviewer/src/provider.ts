@@ -1,13 +1,23 @@
 import { id } from './hash.js';
-import type { Candidate, ContextPacket, ProviderAdapter, ProviderRequest, ProviderResponse, ProviderRoute, Verification } from './types.js';
+import type { Candidate, ContextPacket, ProviderAdapter, ProviderRequest, ProviderResponse, ProviderRoute, ReviewConfig, Verification } from './types.js';
 
 export const OPENAI_ROUTE: ProviderRoute = {
   profile: 'economy_cloud_luna_v1', provider: 'openai', modelId: 'gpt-6-luna', baseUrl: 'https://api.openai.com/v1', apiFormat: 'responses', reasoning: 'medium', structuredOutput: 'json_schema', toolMode: 'server_built_packet', inputPricePerMillion: 0.1, outputPricePerMillion: 0.5,
 };
 
 export const TOKENROUTER_ROUTE: ProviderRoute = {
-  profile: 'economy_cloud_tokenrouter_luna_v1', provider: 'tokenrouter', modelId: 'openai/gpt-6-luna', baseUrl: 'https://tokenrouter.ai/api/v1', apiFormat: 'responses', reasoning: 'medium', structuredOutput: 'json_schema', toolMode: 'server_built_packet', inputPricePerMillion: 0.1, outputPricePerMillion: 0.5,
+  profile: 'economy_cloud_tokenrouter_luna_v1', provider: 'tokenrouter', modelId: 'openai/gpt-5.6-luna', baseUrl: 'https://api.tokenrouter.com/v1', apiFormat: 'responses', reasoning: 'medium', structuredOutput: 'json_schema', toolMode: 'server_built_packet', inputPricePerMillion: 0.1, outputPricePerMillion: 0.5,
 };
+
+export function createResponsesProvider(config: ReviewConfig, fetcher: typeof fetch = fetch): ResponsesProvider | undefined {
+  if (config.profile === 'static_only') return undefined;
+  if (config.profile === 'economy_cloud_tokenrouter_luna_v1') {
+    if (!config.tokenRouterApiKey) return undefined;
+    const route = { ...TOKENROUTER_ROUTE, baseUrl: config.tokenRouterBaseUrl ?? TOKENROUTER_ROUTE.baseUrl, modelId: config.tokenRouterModelId ?? TOKENROUTER_ROUTE.modelId };
+    return new ResponsesProvider(route, config.tokenRouterApiKey, fetcher);
+  }
+  return config.openAiApiKey ? new ResponsesProvider(OPENAI_ROUTE, config.openAiApiKey, fetcher) : undefined;
+}
 
 export class FakeProvider implements ProviderAdapter {
   readonly route = OPENAI_ROUTE;
@@ -30,7 +40,7 @@ export class ResponsesProvider implements ProviderAdapter {
       method: 'POST',
       signal: AbortSignal.timeout(180_000),
       headers: { authorization: `Bearer ${this.#apiKey}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ model: this.route.modelId, reasoning: { effort: this.route.reasoning }, max_output_tokens: request.maxOutputTokens, input: promptFor(request), text: { format: { type: 'json_schema', name: 'review_result', strict: true, schema: schemaFor(request.role) } } }),
+      body: JSON.stringify({ model: this.route.modelId, reasoning: { effort: this.route.reasoning }, max_output_tokens: request.maxOutputTokens, input: promptFor(request), text: { format: { type: 'json_schema', name: 'review_result', strict: true, schema: schemaFor(request.role) } } }),
     });
     const raw: unknown = await response.json();
     if (!response.ok) throw new Error(`provider returned HTTP ${response.status}`);

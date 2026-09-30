@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { configFromEnv, parseDotEnv } from './config.js';
 import { buildContext } from './context.js';
 import { captureSnapshot } from './snapshot.js';
-import { FakeProvider, OPENAI_ROUTE, ResponsesProvider, TOKENROUTER_ROUTE } from './provider.js';
+import { createResponsesProvider, FakeProvider } from './provider.js';
 import { runReview } from './pipeline.js';
 import { ReviewStore } from './store.js';
 import { writeReports } from './report.js';
@@ -163,10 +163,7 @@ async function prReview(): Promise<void> {
 function providerFor(config: ReturnType<typeof configFromEnv>) {
   if (config.profile === 'static_only') return undefined;
   if (process.env.REVIEWER_FAKE_PROVIDER === 'true') return new FakeProvider();
-  const route = config.profile === 'economy_cloud_tokenrouter_luna_v1' ? TOKENROUTER_ROUTE : OPENAI_ROUTE;
-  const key = route.provider === 'tokenrouter' ? config.tokenRouterApiKey : config.openAiApiKey;
-  if (!key) return undefined;
-  return new ResponsesProvider(route, key);
+  return createResponsesProvider(config);
 }
 
 function parseMode(value: string): SnapshotMode {
@@ -175,7 +172,7 @@ function parseMode(value: string): SnapshotMode {
 }
 
 function printHelp(): void {
-  console.log('reviewer doctor\nreviewer review [working_tree|staged|ref] [ref]\nreviewer pr-preview OWNER REPO NUMBER\nreviewer pr-review OWNER REPO NUMBER\nreviewer status\nreviewer serve\nreviewer backup [DIRECTORY]\nreviewer restore DATABASE\nreviewer export REVIEW_ID\n\nA LUNA_API_KEY selects the bounded Luna route automatically. Each PR review is capped at $0.10. Set REVIEWER_LOCAL_ONLY=true for static-only mode.');
+  console.log('reviewer doctor\nreviewer review [working_tree|staged|ref] [ref]\nreviewer pr-preview OWNER REPO NUMBER\nreviewer pr-review OWNER REPO NUMBER\nreviewer status\nreviewer serve\nreviewer backup [DIRECTORY]\nreviewer restore DATABASE\nreviewer export REVIEW_ID\n\nLUNA_API_KEY selects TokenRouter automatically. TOKENROUTER_BASE_URL and TOKENROUTER_MODEL_ID select its exact gateway/model. Each PR review is capped at $0.10. Set REVIEWER_LOCAL_ONLY=true for static-only mode.');
 }
 
 function githubToken(configured: string | undefined): string | undefined {
