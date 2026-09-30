@@ -31,6 +31,7 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--repo", required=True, help="OWNER/REPOSITORY")
     run.add_argument("--workflow", default="black-box-ci.yml")
     run.add_argument("--ref", default="main")
+    run.add_argument("--workflow-ref", default="main", help="branch containing the workflow definition")
     run.add_argument("--commit", help="40-character commit SHA; defaults to local git HEAD")
     run.add_argument("--source-ref", help="ref recorded for the run; defaults to --ref")
     run.add_argument("--idempotency-key", help="stable key used to avoid duplicate requests")
@@ -126,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
             body: dict[str, Any] = {
                 "repository": args.repo,
                 "workflow_file": args.workflow,
-                "workflow_ref": args.ref,
+                "workflow_ref": args.workflow_ref,
                 "source_ref": args.source_ref or args.ref,
                 "commit_sha": commit,
             }

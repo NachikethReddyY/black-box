@@ -119,7 +119,7 @@ source "$HOME/.config/black-box/operator.env"
 Run it from this checkout:
 
 ```bash
-runner/bin/bb run --repo NachikethReddy/AMR-Fan-App --workflow black-box-ci.yml --ref main --commit "$(git rev-parse HEAD)" --json
+runner/bin/bb run --repo NachikethReddy/AMR-Fan-App --workflow black-box-ci.yml --workflow-ref main --ref feature --commit "$(git rev-parse HEAD)" --json
 runner/bin/bb status <REQUEST_ID> --json
 runner/bin/bb watch <REQUEST_ID> --json
 runner/bin/bb rerun <REQUEST_ID> --json
