@@ -115,6 +115,25 @@ test('automatic polling skips drafts, reviews one new head, and suppresses it on
   store.close();
 });
 
+test('automatic polling backs off an incomplete review instead of marking it complete', async () => {
+  const root = tempRepo();
+  const cfg = config(root, { profile: 'economy_cloud_luna_v1', cloudBudgetUsd: 0.10, githubRepositories: [{ owner: 'owner', repo: 'repo' }] });
+  const snapshot = captureSnapshot(cfg, 'ref', 'HEAD');
+  const client = {
+    async listOpenPullRequests() { return [{ ref: { owner: 'owner', repo: 'repo', number: 1 }, headSha: snapshot.headSha ?? 'head', draft: false, title: 'Ready' }]; },
+    async capturePullRequestSnapshot() { return snapshot; },
+    async listPullRequestFiles() { return []; },
+    async publishReview() { throw new Error('must not publish incomplete results'); },
+  };
+  const store = new ReviewStore(cfg);
+  const reviewer = new AutomaticReviewer(cfg, store, client, async () => ({ reviewId: 'review-incomplete' as ReviewId, snapshot, profile: cfg.profile, outcome: 'incomplete', candidates: [], verifications: [], findings: [], secretFindings: [], coverage: { selectedPaths: [], omittedPaths: [], complete: false }, attempts: 0, estimatedCostUsd: 0, error: 'fixture' }));
+  const first = await reviewer.pollOnce();
+  const second = await reviewer.pollOnce();
+  assert.equal(first.failed, 0);
+  assert.equal(second.skippedProcessed, 1);
+  store.close();
+});
+
 function makeCandidate(): Candidate {
   return { candidateId: 'candidate-1', category: 'correctness', severity: 'high', title: 'returns the wrong value', trigger: 'the changed return path is selected', expected: 'the caller receives the stored value', actual: 'the caller receives a constant', impact: 'caller behavior is incorrect', changeRelevance: 'introduced', causalChangeRef: [{ path: 'index.ts', sha256: 'source', start: 1, end: 1, side: 'RIGHT', reason: 'changed return' }], evidence: [{ path: 'index.ts', sha256: 'source', start: 1, end: 1, side: 'RIGHT', reason: 'changed return' }], verificationKind: 'model_assessment', status: 'candidate' };
 }

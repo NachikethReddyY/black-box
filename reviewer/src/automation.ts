@@ -67,7 +67,7 @@ export class AutomaticReviewer {
           } else {
             this.#store.markPublication(result.reviewId, 'not_published');
           }
-          this.#store.completeAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 'completed', result.reviewId);
+          this.#store.completeAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, result.outcome === 'completed_clean' || result.outcome === 'completed_findings' ? 'completed' : 'failed', result.reviewId);
         } catch (error) {
           failed += 1;
           this.#store.completeAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 'failed');
