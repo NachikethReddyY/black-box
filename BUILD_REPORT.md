@@ -7,7 +7,7 @@ Branch: `t3code/reviewer-project-scope`
 
 The repository now contains a connected P1 reviewer core in `reviewer/`. It captures exact local or GitHub PR snapshots, scans and redacts secrets before model packets, extracts bounded TypeScript context, runs correctness and security specialists, verifies candidates, persists evidence and cost state in SQLite, and can publish one bounded GitHub `COMMENT` review with changed-line anchors.
 
-If `LUNA_API_KEY` is present, the default route is direct Luna with a hard `$0.10` per-PR reservation. `REVIEWER_LOCAL_ONLY=true` selects static-only mode. PR-body mutation, runtime execution, automatic triggers, and generated fixes remain disabled.
+If `LUNA_API_KEY` is present, the default route is TokenRouter's OpenAI-compatible Luna endpoint with a hard `$0.10` per-PR reservation. `REVIEWER_LOCAL_ONLY=true` selects static-only mode. PR-body mutation, runtime execution, automatic triggers, and generated fixes remain disabled.
 
 ## Implemented
 
@@ -29,11 +29,11 @@ If `LUNA_API_KEY` is present, the default route is direct Luna with a hard `$0.1
 | Check | Result | Evidence |
 |---|---|---|
 | Reviewer typecheck | Passed | `cd reviewer && pnpm typecheck` |
-| Reviewer tests | Passed, 14 tests | `cd reviewer && pnpm test` |
+| Reviewer tests | Passed, 15 tests | `cd reviewer && pnpm test` |
 | CLI lifecycle | Passed: review, status, export, backup, restore | `reviewer` commands with temporary data directories |
 | Offline smoke evaluation | Passed: clean control stayed clean and seeded bug was retained after verification | `cd reviewer && pnpm run evaluate` |
 | Public PR snapshot | Passed: `psf/requests#7628`, 128 files, exact head captured | `reviewer/evidence/public-pr-preview.json` |
-| GitHub publication | Adapter and fake transport passed; live run stopped before publication | `reviewer/evidence/live-pr-review.json` |
+| GitHub publication | Adapter and fake transport passed; live TokenRouter run posted PR `COMMENT` reviews with changed-line comments | `reviewer/evidence/live-pr-review-tokenrouter.json` |
 | Worker typecheck/tests | Passed, 12 tests | `cd worker && pnpm typecheck && pnpm test` |
 | Dashboard typecheck/build | Passed | `cd dashboard && pnpm typecheck && pnpm build` |
 | Project validation | Passed | `python3 scripts_validate_project.py` |
@@ -42,7 +42,7 @@ If `LUNA_API_KEY` is present, the default route is direct Luna with a hard `$0.1
 
 ## AI and cost status
 
-The configured route is direct Luna. The application reserves at most `$0.10` for one PR review and records returned usage. The bounded live run reached the exact PR snapshot, then the provider returned HTTP 401 `invalid_api_key` before an attempt was admitted. Actual inference spend is `$0`; GitHub reports zero reviews and zero issue comments on the test PR.
+The configured route is TokenRouter at `https://api.tokenrouter.com/v1` using `openai/gpt-5.6-luna`. The account authenticated successfully, the model list exposed that route, and the bounded PR run used three attempts and recorded an estimated `$0.006497` inference cost. It published a GitHub `COMMENT` review for the exact head with no supported findings on the clean rerun. A concurrent duplicate invocation also completed against the same head at an estimated `$0.006708`; both runs stayed below the `$0.10` per-run ceiling. No PR description or issue comment was changed.
 
 The offline evaluation is an engineering smoke test, not a quality benchmark. It has one clean control and one seeded bug fixture. It does not establish precision, recall, latency, or model quality on real pull requests.
 
@@ -57,7 +57,7 @@ The package is designed for the Windows PC's WSL2 Linux filesystem. The OrbStack
 - Provider usage is estimated from returned token counts. A dropped response remains incomplete and is not silently retried.
 - Model findings are advisory and require verifier support. Runtime evidence cannot be claimed in P1.
 - `pr-review` publishes only the exact PR-head `COMMENT` review. It does not edit PR descriptions, create issue comments, request changes, or merge.
-- The supplied key is not accepted by `https://api.openai.com/v1`; a valid Luna/OpenAI-compatible key or its correct base URL is required before live AI review can run.
+- The reviewer depends on the configured TokenRouter account, model catalog, and returned usage fields. A missing or invalid route makes the run incomplete without publication.
 - T-22, feedback learning, knowledge-base lifecycle, runtime sandbox execution, and scheduled/automatic agents remain P2/P3 work.
 - The existing Windows/WSL2 host still needs a direct deployment run when it is available.
 - Invoking the CLI from `reviewer/` discovers the enclosing Git worktree; `REVIEWER_ROOT` remains the explicit override.
@@ -75,10 +75,10 @@ pnpm --dir reviewer run pr-review -- OWNER REPO NUMBER
 REVIEWER_STATUS_TOKEN="$(openssl rand -hex 32)" pnpm --dir reviewer run serve
 ```
 
-With `LUNA_API_KEY` in `.env`, `pr-review OWNER REPO NUMBER` runs the bounded cloud review and publishes one PR comment review. `GITHUB_TOKEN` is optional when `gh auth status` is already authenticated. Set `REVIEWER_LOCAL_ONLY=true` for static-only operation. Stop `serve` with `Ctrl-C` or `SIGTERM`. Use `reviewer/reviewer.service.example` only on a WSL2 installation that provides systemd; no host service was changed by this build.
+With `LUNA_API_KEY` in `.env` and an explicit `GITHUB_TOKEN`, `pr-review OWNER REPO NUMBER` runs the bounded cloud review and publishes one PR review containing inline changed-line comments. Set `REVIEWER_LOCAL_ONLY=true` for static-only operation. Stop `serve` with `Ctrl-C` or `SIGTERM`. Use `reviewer/reviewer.service.example` only on a WSL2 installation that provides systemd; no host service was changed by this build.
 
 ## Checkpoint
 
-The implementation and evidence are ready for review in the requested draft PR. The live run performed no paid model request and no GitHub write. No host restart, firewall change, or external infrastructure purchase was performed.
+The implementation and evidence are ready for review in the requested draft PR. Live model calls and GitHub PR review publication were verified on PR #1. No host restart, firewall change, or external infrastructure purchase was performed.
 
 Generated by GPT-6 Sol through T3 Code.

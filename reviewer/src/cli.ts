@@ -1,5 +1,4 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { configFromEnv, parseDotEnv } from './config.js';
 import { buildContext } from './context.js';
 import { captureSnapshot } from './snapshot.js';
@@ -142,7 +141,7 @@ async function prReview(): Promise<void> {
   const config = configFromEnv();
   if (config.profile === 'static_only') throw new Error('pr-review requires LUNA_API_KEY; set REVIEWER_LOCAL_ONLY=true only for local static review');
   const authToken = githubToken(config.githubToken);
-  if (!authToken) throw new Error('pr-review requires GITHUB_TOKEN or an authenticated gh CLI session for PR comments');
+  if (!authToken) throw new Error('pr-review requires explicit GITHUB_TOKEN for PR comments');
   const api = new GitHubApi(authToken);
   const ref: PullRequestRef = { owner, repo, number };
   const snapshot = await api.capturePullRequestSnapshot(ref);
@@ -176,6 +175,5 @@ function printHelp(): void {
 }
 
 function githubToken(configured: string | undefined): string | undefined {
-  if (configured) return configured;
-  try { return execFileSync('gh', ['auth', 'token'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || undefined; } catch { return undefined; }
+  return configured;
 }

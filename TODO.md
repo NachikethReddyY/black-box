@@ -62,6 +62,7 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [x] Add the complete self-contained T-01..T-36 acceptance definitions and align P1/P2/P3 phase ownership.
 - [x] Validate source notes, traceability IDs, acceptance IDs, required documents, and whitespace.
 - [x] Implement the connected reviewer foundation, bounded Luna route, PR-only COMMENT publisher, and local status service.
-- [x] Run reviewer typecheck, 14 focused tests, offline evaluation, public PR snapshot, and fake GitHub publication tests.
-- [x] Run one bounded live attempt against `NachikethReddyY/black-box#1`; GitHub snapshot/read auth succeeded and the provider returned `invalid_api_key` before any model attempt or charge.
-- [ ] Replace the rejected provider key or configure its correct OpenAI-compatible base URL, then rerun one bounded PR review to verify real inline comments.
+- [x] Run reviewer typecheck, 15 focused tests, offline evaluation, public PR snapshot, and fake GitHub publication tests.
+- [x] Configure the supplied TokenRouter key at `https://api.tokenrouter.com/v1` with `openai/gpt-5.6-luna` and run a bounded live review against `NachikethReddyY/black-box#1`.
+- [x] Verify live GitHub `COMMENT` publication with changed-line filtering and record the model usage and exact reviewed head.
+- [ ] Run the same reviewer on an independent seeded-bug PR to measure detection quality without relying on this documentation-heavy clean control.

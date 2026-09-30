@@ -49,13 +49,13 @@ routes:
 
 `static_only` is the safe installation default when no provider key is configured. With `LUNA_API_KEY` or `TOKENROUTER_API_KEY`, the first executable cloud profile is `economy_cloud_tokenrouter_luna_v1` at `https://api.tokenrouter.com/v1`. It is deliberately conservative: no model tool calls in P1, no automatic escalation, and no cloud request until local secret scanning and redaction complete. A different-family verifier is an evaluation profile, not an inferred production route.
 
-The direct OpenAI route is separate from this optional TokenRouter route:
+The direct OpenAI route remains separately selectable when an explicit `OPENAI_API_KEY` and the direct profile are configured:
 
 ```yaml
-profile: economy_cloud_tokenrouter_luna_v1
+profile: economy_cloud_luna_v1
 default: false
-provider: tokenrouter
-model_id: openai/gpt-5.6-luna
+provider: openai
+model_id: gpt-6-luna
 api_format: responses
 reasoning: medium
 structured_output: json_schema
