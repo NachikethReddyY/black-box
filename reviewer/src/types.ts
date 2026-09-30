@@ -173,5 +173,10 @@ export interface ReviewConfig {
   readonly tokenRouterApiKey?: string;
   readonly tokenRouterBaseUrl?: string;
   readonly tokenRouterModelId?: string;
+  /** GitHub App credentials used for publication. Personal GitHub tokens are never used by pr-review. */
+  readonly githubAppId?: string;
+  readonly githubAppInstallationId?: string;
+  readonly githubAppPrivateKeyFile?: string;
+  /** Optional read-only token for previewing private PRs. It cannot publish reviews. */
   readonly githubToken?: string;
 }

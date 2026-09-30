@@ -27,6 +27,11 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env, cwd = proces
   if (cloudBudgetUsd < 0) throw new Error('REVIEWER_CLOUD_BUDGET_USD cannot be negative');
   if (profile !== 'static_only' && cloudBudgetUsd <= 0 && !env.REVIEWER_ALLOW_UNBUDGETED_TEST) throw new Error('cloud review requires a positive budget');
   if (cloudBudgetUsd > 0.10 && !env.REVIEWER_ALLOW_LARGER_BUDGET) throw new Error('review budget is capped at $0.10 per PR');
+  const githubAppId = env.GITHUB_APP_ID?.trim() || undefined;
+  const githubAppInstallationId = env.GITHUB_APP_INSTALLATION_ID?.trim() || undefined;
+  const githubAppPrivateKeyFile = env.GITHUB_APP_PRIVATE_KEY_FILE?.trim() || undefined;
+  const appCredentialCount = [githubAppId, githubAppInstallationId, githubAppPrivateKeyFile].filter(Boolean).length;
+  if (appCredentialCount !== 0 && appCredentialCount !== 3) throw new Error('GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and GITHUB_APP_PRIVATE_KEY_FILE must be configured together');
   return {
     root, dataDir, profile, maxAttempts,
     maxInputTokens: integer(env.REVIEWER_MAX_INPUT_TOKENS, 32_768),
@@ -38,6 +43,9 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env, cwd = proces
     tokenRouterApiKey,
     tokenRouterBaseUrl: env.TOKENROUTER_BASE_URL ? parseBaseUrl(env.TOKENROUTER_BASE_URL.trim()) : undefined,
     tokenRouterModelId: env.TOKENROUTER_MODEL_ID?.trim() || undefined,
+    githubAppId,
+    githubAppInstallationId,
+    githubAppPrivateKeyFile,
     githubToken: env.GITHUB_TOKEN?.trim() || undefined,
   };
 }

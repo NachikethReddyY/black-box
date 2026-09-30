@@ -66,3 +66,11 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [x] Configure the supplied TokenRouter key at `https://api.tokenrouter.com/v1` with `openai/gpt-5.6-luna` and run a bounded live review against `NachikethReddyY/black-box#1`.
 - [x] Verify live GitHub `COMMENT` publication with changed-line filtering and record the model usage and exact reviewed head.
 - [ ] Run the same reviewer on an independent seeded-bug PR to measure detection quality without relying on this documentation-heavy clean control.
+
+## GitHub App publication identity (thread current, 30 September 2026)
+
+- [x] Remove personal-account publication from the reviewer CLI. `pr-review` now requires a GitHub App installation token.
+- [x] Add Node GitHub App JWT signing, installation-token exchange, private-key permission checks, and fixture coverage.
+- [x] Document App-only publication and keep `GITHUB_TOKEN` limited to optional private PR preview reads.
+- [ ] Configure the existing App ID and target-repository installation ID in the local reviewer environment before the first bot-authenticated PR review.
+- [ ] Run one bounded bot-authenticated review only on an owned repository after the App installation is confirmed.

@@ -9,6 +9,7 @@ import { writeReports } from './report.js';
 import { changedRightLines, GitHubApi, type PullRequestRef } from './github.js';
 import { buildReviewPreview } from './publisher.js';
 import { listenStatusServer } from './status-server.js';
+import { createConfiguredGitHubInstallationToken, githubAppCredentials } from './github-app.js';
 import type { SnapshotMode } from './types.js';
 
 loadDotEnv();
@@ -37,7 +38,7 @@ function loadDotEnv(): void {
 
 function doctor(): void {
   const config = configFromEnv();
-  console.log(JSON.stringify({ root: config.root, dataDir: config.dataDir, profile: config.profile, maxAttempts: config.maxAttempts, cloudBudgetUsd: config.cloudBudgetUsd, cloudKeyConfigured: Boolean(config.openAiApiKey || config.tokenRouterApiKey), publication: 'PR COMMENT only via pr-review' }, null, 2));
+  console.log(JSON.stringify({ root: config.root, dataDir: config.dataDir, profile: config.profile, maxAttempts: config.maxAttempts, cloudBudgetUsd: config.cloudBudgetUsd, cloudKeyConfigured: Boolean(config.openAiApiKey || config.tokenRouterApiKey), githubAppConfigured: Boolean(githubAppCredentials(config)), personalGithubTokenConfigured: Boolean(config.githubToken), publication: 'PR COMMENT via GitHub App installation identity only' }, null, 2));
 }
 
 function status(): void {
@@ -140,8 +141,7 @@ async function prReview(): Promise<void> {
   if (!owner || !repo || !Number.isSafeInteger(number) || number < 1) throw new Error('usage: reviewer pr-review OWNER REPO NUMBER');
   const config = configFromEnv();
   if (config.profile === 'static_only') throw new Error('pr-review requires a TokenRouter key; set REVIEWER_LOCAL_ONLY=true only for local static review');
-  const authToken = githubToken(config.githubToken);
-  if (!authToken) throw new Error('pr-review requires explicit GITHUB_TOKEN for PR comments');
+  const authToken = (await createConfiguredGitHubInstallationToken(config)).token;
   const api = new GitHubApi(authToken);
   const ref: PullRequestRef = { owner, repo, number };
   const snapshot = await api.capturePullRequestSnapshot(ref);
@@ -171,7 +171,7 @@ function parseMode(value: string): SnapshotMode {
 }
 
 function printHelp(): void {
-  console.log('reviewer doctor\nreviewer review [working_tree|staged|ref] [ref]\nreviewer pr-preview OWNER REPO NUMBER\nreviewer pr-review OWNER REPO NUMBER\nreviewer status\nreviewer serve\nreviewer backup [DIRECTORY]\nreviewer restore DATABASE\nreviewer export REVIEW_ID\n\nLUNA_API_KEY selects TokenRouter automatically. TOKENROUTER_BASE_URL and TOKENROUTER_MODEL_ID select its exact gateway/model. Each PR review is capped at $0.10. Set REVIEWER_LOCAL_ONLY=true for static-only mode.');
+  console.log('reviewer doctor\nreviewer review [working_tree|staged|ref] [ref]\nreviewer pr-preview OWNER REPO NUMBER\nreviewer pr-review OWNER REPO NUMBER\nreviewer status\nreviewer serve\nreviewer backup [DIRECTORY]\nreviewer restore DATABASE\nreviewer export REVIEW_ID\n\nLUNA_API_KEY selects TokenRouter automatically. TOKENROUTER_BASE_URL and TOKENROUTER_MODEL_ID select its exact gateway/model. Each PR review is capped at $0.10. pr-review publishes only with a GitHub App installation token; GITHUB_TOKEN is not accepted for publication. Set REVIEWER_LOCAL_ONLY=true for static-only mode.');
 }
 
 function githubToken(configured: string | undefined): string | undefined {

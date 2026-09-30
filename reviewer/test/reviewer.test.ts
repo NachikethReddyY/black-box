@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { generateKeyPairSync } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -16,6 +17,7 @@ import { tempRepo, run } from './helpers.js';
 import { changedRightLines, GitHubApi } from '../src/github.js';
 import { buildReviewPreview } from '../src/publisher.js';
 import { listenStatusServer } from '../src/status-server.js';
+import { createGitHubAppJwt, createGitHubInstallationToken, githubAppCredentials } from '../src/github-app.js';
 
 function config(root: string, extra: Partial<ReviewConfig> = {}): ReviewConfig {
   return { root, dataDir: mkdtempSync(join(tmpdir(), 'blackbox-reviewer-data-')), profile: 'static_only', maxAttempts: 4, maxInputTokens: 32_768, maxOutputTokens: 16_384, maxPacketBytes: 128 * 1024, maxInlineFindings: 5, cloudBudgetUsd: 0, ...extra };
@@ -121,6 +123,45 @@ test('Luna key selects TokenRouter and is never assigned to the direct OpenAI ro
   assert.equal(cfg.openAiApiKey, undefined);
   const direct = configFromEnv({ LUNA_API_KEY: 'router-key', REVIEWER_PROFILE: 'economy_cloud_luna_v1' }, '/tmp');
   assert.equal(createResponsesProvider(direct), undefined);
+});
+
+test('GitHub App publication credentials are all-or-nothing and do not use a personal token', () => {
+  assert.throws(() => configFromEnv({ GITHUB_APP_ID: '123' }, '/tmp'), /configured together/);
+  const configured = configFromEnv({ GITHUB_APP_ID: '123', GITHUB_APP_INSTALLATION_ID: '456', GITHUB_APP_PRIVATE_KEY_FILE: '/tmp/app.pem', GITHUB_TOKEN: 'personal' }, '/tmp');
+  assert.deepEqual(githubAppCredentials(configured), { appId: '123', installationId: '456', privateKeyFile: '/tmp/app.pem' });
+  assert.equal(configured.githubToken, 'personal');
+});
+
+test('GitHub App signs a short-lived JWT and exchanges it for an installation token', async () => {
+  const key = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const directory = mkdtempSync(join(tmpdir(), 'blackbox-github-app-'));
+  const privateKeyFile = join(directory, 'private-key.pem');
+  writeFileSync(privateKeyFile, key.privateKey.export({ type: 'pkcs8', format: 'pem' }));
+  chmodSync(privateKeyFile, 0o600);
+  const credentials = { appId: '123456', installationId: '987654', privateKeyFile };
+  let request: { url: string; authorization: string | null } | undefined;
+  const fetcher: typeof fetch = async (input, init) => {
+    request = { url: String(input), authorization: new Headers(init?.headers).get('authorization') };
+    return new Response(JSON.stringify({ token: 'installation-token', expires_at: '2099-01-01T00:00:00Z' }), { status: 201 });
+  };
+  const token = await createGitHubInstallationToken(credentials, fetcher, 1_700_000_000, 'https://github.test');
+  assert.deepEqual(token, { token: 'installation-token', expiresAt: '2099-01-01T00:00:00Z' });
+  assert.equal(request?.url, 'https://github.test/app/installations/987654/access_tokens');
+  assert.match(request?.authorization ?? '', /^Bearer [^.]+\.[^.]+\.[^.]+$/);
+  const [, encodedPayload] = (request?.authorization ?? '').slice('Bearer '.length).split('.');
+  const payload = JSON.parse(Buffer.from(encodedPayload ?? '', 'base64url').toString('utf8')) as { iss: string; iat: number; exp: number };
+  assert.deepEqual(payload, { iss: '123456', iat: 1_699_999_940, exp: 1_700_000_540 });
+  const jwt = createGitHubAppJwt(credentials, key.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(), 1_700_000_000);
+  assert.equal(jwt.split('.').length, 3);
+});
+
+test('GitHub App private keys must not be group or world accessible', async () => {
+  const key = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const directory = mkdtempSync(join(tmpdir(), 'blackbox-github-app-mode-'));
+  const privateKeyFile = join(directory, 'private-key.pem');
+  writeFileSync(privateKeyFile, key.privateKey.export({ type: 'pkcs8', format: 'pem' }));
+  chmodSync(privateKeyFile, 0o644);
+  await assert.rejects(createGitHubInstallationToken({ appId: '123', installationId: '456', privateKeyFile }, async () => new Response('{}')), /group\/world accessible/);
 });
 
 test('TokenRouter Luna uses the configured gateway and keeps local-only mode authoritative', async () => {
