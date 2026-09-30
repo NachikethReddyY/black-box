@@ -18,14 +18,25 @@ import { changedRightLines, GitHubApi } from '../src/github.js';
 import { buildReviewPreview } from '../src/publisher.js';
 import { listenStatusServer } from '../src/status-server.js';
 import { createGitHubAppJwt, createGitHubInstallationToken, githubAppCredentials } from '../src/github-app.js';
+import { AutomaticReviewer } from '../src/automation.js';
 
 function config(root: string, extra: Partial<ReviewConfig> = {}): ReviewConfig {
-  return { root, dataDir: mkdtempSync(join(tmpdir(), 'blackbox-reviewer-data-')), profile: 'static_only', maxAttempts: 4, maxInputTokens: 32_768, maxOutputTokens: 16_384, maxPacketBytes: 128 * 1024, maxInlineFindings: 5, cloudBudgetUsd: 0, ...extra };
+  return { root, dataDir: mkdtempSync(join(tmpdir(), 'blackbox-reviewer-data-')), profile: 'static_only', maxAttempts: 4, maxInputTokens: 32_768, maxOutputTokens: 16_384, maxPacketBytes: 128 * 1024, maxInlineFindings: 5, cloudBudgetUsd: 0, githubRepositories: [], pollIntervalMs: 60_000, includeDrafts: false, maxAutomaticReviewsPerPoll: 1, ...extra };
 }
 
 test('parses dotenv with spaces without exposing values', () => {
   const parsed = parseDotEnv('LUNA_API_KEY = secret\n# ignored\nBAD KEY=nope\n');
   assert.deepEqual(parsed, { LUNA_API_KEY: 'secret' });
+});
+
+test('automatic polling configuration is explicit and safe by default', () => {
+  const cfg = configFromEnv({ REVIEWER_GITHUB_REPOSITORIES: 'NachikethReddyY/black-box', REVIEWER_POLL_INTERVAL_SECONDS: '30', REVIEWER_INCLUDE_DRAFTS: 'true' }, '/tmp');
+  assert.deepEqual(cfg.githubRepositories, [{ owner: 'NachikethReddyY', repo: 'black-box' }]);
+  assert.equal(cfg.pollIntervalMs, 30_000);
+  assert.equal(cfg.includeDrafts, true);
+  assert.equal(cfg.maxAutomaticReviewsPerPoll, 1);
+  assert.throws(() => configFromEnv({ REVIEWER_GITHUB_REPOSITORIES: 'owner/repo/extra' }, '/tmp'), /invalid/);
+  assert.throws(() => configFromEnv({ REVIEWER_POLL_INTERVAL_SECONDS: '10' }, '/tmp'), /at least 15/);
 });
 
 test('working-tree and staged snapshots capture different immutable bytes', () => {
@@ -69,6 +80,38 @@ test('static review persists an exact result and publication preview without a m
   assert.equal(result.attempts, 0);
   assert.ok(store.getReview(result.reviewId));
   assert.match(reportMarkdown(result), /Outcome: \*\*completed_clean\*\*/);
+  store.close();
+});
+
+test('automatic head claims are durable and suppress duplicate polling', () => {
+  const cfg = config(tempRepo());
+  const store = new ReviewStore(cfg);
+  assert.equal(store.claimAutomaticHead('owner', 'repo', 1, 'head', 60_000, 1_000), true);
+  assert.equal(store.claimAutomaticHead('owner', 'repo', 1, 'head', 60_000, 1_001), false);
+  store.completeAutomaticHead('owner', 'repo', 1, 'head', 'completed', 'review-1', 60_000, 1_002);
+  assert.equal(store.claimAutomaticHead('owner', 'repo', 1, 'head', 60_000, 1_003), false);
+  assert.equal(store.claimAutomaticHead('owner', 'repo', 1, 'new-head', 60_000, 1_004), true);
+  store.close();
+});
+
+test('automatic polling skips drafts, reviews one new head, and suppresses it on the next poll', async () => {
+  const root = tempRepo();
+  const cfg = config(root, { profile: 'static_only', githubRepositories: [{ owner: 'owner', repo: 'repo' }], includeDrafts: false, maxAutomaticReviewsPerPoll: 1 });
+  const snapshot = captureSnapshot(cfg, 'ref', 'HEAD');
+  const requests: string[] = [];
+  const client = {
+    async listOpenPullRequests() { return [{ ref: { owner: 'owner', repo: 'repo', number: 1 }, headSha: 'draft-head', draft: true, title: 'Draft' }, { ref: { owner: 'owner', repo: 'repo', number: 2 }, headSha: 'ready-head', draft: false, title: 'Ready' }]; },
+    async capturePullRequestSnapshot() { return { ...snapshot, headSha: 'ready-head', changedPaths: ['index.ts'] }; },
+    async listPullRequestFiles() { return [{ path: 'index.ts', status: 'modified', additions: 1, deletions: 0, patch: '@@ -1 +1 @@\n+changed' }]; },
+    async publishReview(_ref: unknown, payload: { commit_id: string }) { requests.push(payload.commit_id); return { reviewId: 99 }; },
+  };
+  const store = new ReviewStore(cfg);
+  const reviewer = new AutomaticReviewer(cfg, store, client);
+  const first = await reviewer.pollOnce();
+  assert.deepEqual(first, { discovered: 2, skippedDrafts: 1, skippedProcessed: 0, reviewed: 1, published: 1, failed: 0 });
+  const second = await reviewer.pollOnce();
+  assert.deepEqual(second, { discovered: 2, skippedDrafts: 1, skippedProcessed: 1, reviewed: 0, published: 0, failed: 0 });
+  assert.deepEqual(requests, ['ready-head']);
   store.close();
 });
 
@@ -227,6 +270,19 @@ test('GitHub adapter validates PR metadata and paginates files through an inject
   assert.equal(files[0]?.path, 'index.ts');
   assert.equal(requests.length, 2);
   assert.ok(requests.every((url) => url.startsWith('https://github.test/')));
+});
+
+test('GitHub adapter lists open PR heads and draft state for automatic polling', async () => {
+  const fetcher: typeof fetch = async (input) => {
+    const url = String(input);
+    assert.match(url, /pulls\?state=open/);
+    return new Response(JSON.stringify([{ number: 3, title: 'Ready', draft: false, head: { sha: 'head-3' } }, { number: 4, title: 'Draft', draft: true, head: { sha: 'head-4' } }]), { status: 200 });
+  };
+  const api = new GitHubApi('app-token', fetcher, 'https://github.test');
+  assert.deepEqual(await api.listOpenPullRequests({ owner: 'owner', repo: 'repo' }), [
+    { ref: { owner: 'owner', repo: 'repo', number: 3 }, headSha: 'head-3', draft: false, title: 'Ready' },
+    { ref: { owner: 'owner', repo: 'repo', number: 4 }, headSha: 'head-4', draft: true, title: 'Draft' },
+  ]);
 });
 
 test('GitHub publisher posts one COMMENT review with only changed-line anchors', async () => {

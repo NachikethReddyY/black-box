@@ -60,6 +60,17 @@ export class ReviewStore {
         status TEXT NOT NULL,
         created_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS automatic_heads (
+        head_key TEXT PRIMARY KEY,
+        owner TEXT NOT NULL,
+        repo TEXT NOT NULL,
+        pull_number INTEGER NOT NULL,
+        head_sha TEXT NOT NULL,
+        status TEXT NOT NULL,
+        review_id TEXT,
+        lease_until INTEGER NOT NULL,
+        updated_at TEXT NOT NULL
+      );
     `);
   }
 
@@ -112,6 +123,36 @@ export class ReviewStore {
   getReview(reviewId: string): ReviewResult | undefined {
     const row = this.#db.prepare('SELECT payload_json FROM reviews WHERE review_id = ?').get(reviewId) as { payload_json: string } | undefined;
     return row ? JSON.parse(row.payload_json) as ReviewResult : undefined;
+  }
+
+  hasSnapshot(snapshotId: string): boolean {
+    const row = this.#db.prepare('SELECT 1 FROM reviews WHERE snapshot_id = ? LIMIT 1').get(snapshotId);
+    return row !== undefined;
+  }
+
+  claimAutomaticHead(owner: string, repo: string, pullNumber: number, headSha: string, leaseMs: number, now = Date.now()): boolean {
+    const headKey = `${owner}/${repo}#${pullNumber}@${headSha}`;
+    this.#db.exec('BEGIN IMMEDIATE');
+    try {
+      const existing = this.#db.prepare('SELECT status, lease_until FROM automatic_heads WHERE head_key = ?').get(headKey) as { status: string; lease_until: number } | undefined;
+      if (existing?.status === 'completed' || (existing?.status === 'processing' && existing.lease_until > now) || (existing?.status === 'failed' && existing.lease_until > now)) {
+        this.#db.exec('COMMIT');
+        return false;
+      }
+      this.#db.prepare(`INSERT INTO automatic_heads (head_key, owner, repo, pull_number, head_sha, status, review_id, lease_until, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'processing', NULL, ?, ?)
+        ON CONFLICT(head_key) DO UPDATE SET status = 'processing', lease_until = excluded.lease_until, updated_at = excluded.updated_at`).run(headKey, owner, repo, pullNumber, headSha, now + leaseMs, new Date(now).toISOString());
+      this.#db.exec('COMMIT');
+      return true;
+    } catch (error) {
+      this.#db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  completeAutomaticHead(owner: string, repo: string, pullNumber: number, headSha: string, status: 'completed' | 'failed', reviewId?: string, retryAfterMs = 900_000, now = Date.now()): void {
+    const headKey = `${owner}/${repo}#${pullNumber}@${headSha}`;
+    this.#db.prepare('UPDATE automatic_heads SET status = ?, review_id = ?, lease_until = ?, updated_at = ? WHERE head_key = ?').run(status, reviewId ?? null, status === 'completed' ? Number.MAX_SAFE_INTEGER : now + retryAfterMs, new Date(now).toISOString(), headKey);
   }
 
   listReviews(): readonly { reviewId: string; snapshotId: string; profile: string; outcome: string; createdAt: string }[] {

@@ -1,5 +1,6 @@
 export interface PullRequestRef { readonly owner: string; readonly repo: string; readonly number: number; }
-export interface PullRequestSnapshot { readonly ref: PullRequestRef; readonly baseSha: string; readonly headSha: string; readonly title: string; readonly body: string | null; }
+export interface PullRequestSnapshot { readonly ref: PullRequestRef; readonly baseSha: string; readonly headSha: string; readonly title: string; readonly body: string | null; readonly draft: boolean; }
+export interface PullRequestSummary { readonly ref: PullRequestRef; readonly headSha: string; readonly draft: boolean; readonly title: string; }
 export interface PullRequestFile { readonly path: string; readonly status: string; readonly additions: number; readonly deletions: number; readonly patch?: string; }
 
 export function changedRightLines(files: readonly PullRequestFile[]): ReadonlyMap<string, ReadonlySet<number>> {
@@ -28,6 +29,7 @@ export interface GitHubClient {
   listPullRequestFiles(ref: PullRequestRef): Promise<readonly PullRequestFile[]>;
   previewReview(ref: PullRequestRef, payload: ReviewPreview): ReviewPreview;
   publishReview(ref: PullRequestRef, payload: ReviewPreview): Promise<{ readonly reviewId: number; readonly url?: string }>;
+  listOpenPullRequests(repository: { readonly owner: string; readonly repo: string }): Promise<readonly PullRequestSummary[]>;
 }
 
 export interface ReviewPreview { readonly commit_id: string; readonly event: 'COMMENT'; readonly body: string; readonly comments: readonly { readonly path: string; readonly line: number; readonly side: 'RIGHT' | 'LEFT'; readonly body: string }[]; }
@@ -41,7 +43,21 @@ export class GitHubApi implements GitHubClient {
   async getPullRequest(ref: PullRequestRef): Promise<PullRequestSnapshot> {
     const row = record(await this.#request(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/pulls/${ref.number}`));
     const base = record(row.base); const head = record(row.head);
-    return { ref, baseSha: string(base.sha), headSha: string(head.sha), title: string(row.title), body: row.body === null ? null : string(row.body) };
+    return { ref, baseSha: string(base.sha), headSha: string(head.sha), title: string(row.title), body: row.body === null ? null : string(row.body), draft: row.draft === true };
+  }
+
+  async listOpenPullRequests(repository: { readonly owner: string; readonly repo: string }): Promise<readonly PullRequestSummary[]> {
+    const result: PullRequestSummary[] = [];
+    for (let page = 1; page <= 10; page += 1) {
+      const value = await this.#request(`/repos/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.repo)}/pulls?state=open&sort=updated&direction=desc&per_page=100&page=${page}`);
+      if (!Array.isArray(value)) throw new Error('GitHub pull request response was not an array');
+      for (const item of value) {
+        const row = record(item); const head = record(row.head);
+        result.push({ ref: { owner: repository.owner, repo: repository.repo, number: integer(row.number) }, headSha: string(head.sha), draft: row.draft === true, title: string(row.title) });
+      }
+      if (value.length < 100) return result;
+    }
+    throw new Error('GitHub open pull request pagination exceeded safety limit');
   }
 
   async listPullRequestFiles(ref: PullRequestRef): Promise<readonly PullRequestFile[]> {

@@ -10,6 +10,7 @@ import { changedRightLines, GitHubApi, type PullRequestRef } from './github.js';
 import { buildReviewPreview } from './publisher.js';
 import { listenStatusServer } from './status-server.js';
 import { createConfiguredGitHubInstallationToken, githubAppCredentials } from './github-app.js';
+import { AutomaticReviewer } from './automation.js';
 import type { SnapshotMode } from './types.js';
 
 loadDotEnv();
@@ -25,6 +26,8 @@ else if (command === 'backup') backup();
 else if (command === 'restore') restore();
 else if (command === 'export') exportReview();
 else if (command === 'serve') await serve();
+else if (command === 'poll-once') await pollOnce();
+else if (command === 'watch') await watch();
 else if (command === 'help') printHelp();
 else { console.error(`unknown command: ${command}`); process.exitCode = 2; }
 
@@ -102,6 +105,47 @@ async function serve(): Promise<void> {
   });
 }
 
+async function pollOnce(): Promise<void> {
+  const config = configFromEnv();
+  const api = await configuredAppApi(config);
+  const store = new ReviewStore(config);
+  try {
+    if (!(config.githubRepositories?.length)) throw new Error('automatic review requires REVIEWER_GITHUB_REPOSITORIES');
+    const cycle = await new AutomaticReviewer(config, store, api).pollOnce();
+    console.log(JSON.stringify(cycle, null, 2));
+  } finally { store.close(); }
+}
+
+async function watch(): Promise<void> {
+  const config = configFromEnv();
+  if (!(config.githubRepositories?.length)) throw new Error('automatic review requires REVIEWER_GITHUB_REPOSITORIES');
+  const store = new ReviewStore(config);
+  let api: GitHubApi | undefined;
+  let tokenExpiresAt = 0;
+  let stopping = false;
+  const stop = (): void => { stopping = true; };
+  process.once('SIGINT', stop); process.once('SIGTERM', stop);
+  try {
+    while (!stopping) {
+      if (!api || tokenExpiresAt - Date.now() < 60_000) {
+        const installationToken = await createConfiguredGitHubInstallationToken(config);
+        api = new GitHubApi(installationToken.token);
+        tokenExpiresAt = installationToken.expiresAt ? Date.parse(installationToken.expiresAt) : Date.now() + 45 * 60_000;
+      }
+      const cycle = await new AutomaticReviewer(config, store, api).pollOnce();
+      console.log(JSON.stringify({ event: 'automatic_review_cycle', at: new Date().toISOString(), ...cycle }));
+      if (!stopping) await new Promise<void>((resolve) => setTimeout(resolve, config.pollIntervalMs ?? 60_000));
+    }
+  } finally {
+    process.off('SIGINT', stop); process.off('SIGTERM', stop); store.close();
+  }
+}
+
+async function configuredAppApi(config: ReturnType<typeof configFromEnv>): Promise<GitHubApi> {
+  if (!githubAppCredentials(config)) throw new Error('automatic review requires GitHub App credentials');
+  return new GitHubApi((await createConfiguredGitHubInstallationToken(config)).token);
+}
+
 async function review(): Promise<void> {
   const mode = parseMode(cliArgs[1] ?? 'working_tree');
   const config = configFromEnv();
@@ -171,7 +215,7 @@ function parseMode(value: string): SnapshotMode {
 }
 
 function printHelp(): void {
-  console.log('reviewer doctor\nreviewer review [working_tree|staged|ref] [ref]\nreviewer pr-preview OWNER REPO NUMBER\nreviewer pr-review OWNER REPO NUMBER\nreviewer status\nreviewer serve\nreviewer backup [DIRECTORY]\nreviewer restore DATABASE\nreviewer export REVIEW_ID\n\nLUNA_API_KEY selects TokenRouter automatically. TOKENROUTER_BASE_URL and TOKENROUTER_MODEL_ID select its exact gateway/model. Each PR review is capped at $0.10. pr-review publishes only with a GitHub App installation token; GITHUB_TOKEN is not accepted for publication. Set REVIEWER_LOCAL_ONLY=true for static-only mode.');
+  console.log('reviewer doctor\nreviewer review [working_tree|staged|ref] [ref]\nreviewer pr-preview OWNER REPO NUMBER\nreviewer pr-review OWNER REPO NUMBER\nreviewer poll-once\nreviewer watch\nreviewer status\nreviewer serve\nreviewer backup [DIRECTORY]\nreviewer restore DATABASE\nreviewer export REVIEW_ID\n\nLUNA_API_KEY selects TokenRouter automatically. TOKENROUTER_BASE_URL and TOKENROUTER_MODEL_ID select its exact gateway/model. Each PR review is capped at $0.10. Automatic watch polls configured repositories and publishes one App-authored COMMENT review per new open PR head. Set REVIEWER_LOCAL_ONLY=true for static-only mode.');
 }
 
 function githubToken(configured: string | undefined): string | undefined {

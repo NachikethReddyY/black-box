@@ -72,5 +72,12 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [x] Remove personal-account publication from the reviewer CLI. `pr-review` now requires a GitHub App installation token.
 - [x] Add Node GitHub App JWT signing, installation-token exchange, private-key permission checks, and fixture coverage.
 - [x] Document App-only publication and keep `GITHUB_TOKEN` limited to optional private PR preview reads.
-- [ ] Configure the existing App ID and target-repository installation ID in the local reviewer environment before the first bot-authenticated PR review.
+- [x] Configure the existing App ID and target-repository installation ID in the local reviewer environment before the first bot-authenticated PR review.
 - [ ] Run one bounded bot-authenticated review only on an owned repository after the App installation is confirmed.
+
+## Automatic PR reviewer (thread current, 30 September 2026)
+
+- [x] Add App-installation repository and open-PR polling with a durable per-head claim.
+- [x] Reuse the exact snapshot, pipeline, changed-line publisher, and App identity for each new PR head.
+- [x] Add restart, draft filtering, duplicate, and head-change tests without live model calls.
+- [x] Add WSL2 watcher startup instructions and verify the local watcher remains within the per-review budget.

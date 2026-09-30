@@ -1,0 +1,16 @@
+[Unit]
+Description=Black Box automatic pull request reviewer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/reviewer/BlackBox/reviewer
+EnvironmentFile=/home/reviewer/.config/blackbox-reviewer.env
+ExecStart=/usr/bin/pnpm run watch
+Restart=on-failure
+RestartSec=15
+KillSignal=SIGINT
+
+[Install]
+WantedBy=default.target

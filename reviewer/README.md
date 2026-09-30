@@ -12,6 +12,8 @@ pnpm run review -- working_tree
 pnpm run review -- staged
 pnpm run pr-preview -- OWNER REPO NUMBER
 pnpm run pr-review -- OWNER REPO NUMBER
+pnpm run poll-once
+pnpm run watch
 pnpm run status
 REVIEWER_STATUS_TOKEN='local-secret' pnpm run serve
 pnpm run backup -- /home/reviewer/backups/reviewer
@@ -27,6 +29,8 @@ Run the commands from either the repository root with `pnpm --dir reviewer ...` 
 Supported profiles are `economy_cloud_tokenrouter_luna_v1` for the configured TokenRouter Responses API and `economy_cloud_luna_v1` for a separately configured direct OpenAI route. Set `TOKENROUTER_BASE_URL` or `TOKENROUTER_MODEL_ID` only when your TokenRouter account requires a different route. Provider keys are read from protected environment configuration. The CLI never prints them. Public PR metadata and archive reads can run without `GITHUB_TOKEN`; `pr-preview` may use it for private reads, but `pr-review` refuses personal GitHub tokens and requires the installed App identity.
 
 `serve` binds only to `127.0.0.1`. `/healthz` is unauthenticated for local process checks; `/status` requires `Authorization: Bearer $REVIEWER_STATUS_TOKEN` and returns SQLite integrity plus review metadata. Stop it with `Ctrl-C` or `SIGTERM`. It does not authorize reviews, model spending, repository writes, or GitHub publication.
+
+`watch` polls the explicitly configured `REVIEWER_GITHUB_REPOSITORIES` with the GitHub App installation token. It considers open PRs, skips drafts by default, and reviews at most `REVIEWER_MAX_AUTOMATIC_REVIEWS_PER_POLL` new head revisions per cycle. A durable SQLite claim prevents duplicate reviews after normal polling or a restart. Set `REVIEWER_INCLUDE_DRAFTS=true` only when you deliberately want draft PRs reviewed. The watcher polls every `REVIEWER_POLL_INTERVAL_SECONDS` seconds and backs off failed heads for 15 minutes.
 
 ## Evidence and limits
 

@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
-import type { ReviewConfig, ReviewProfile } from './types.js';
+import type { RepositoryRef, ReviewConfig, ReviewProfile } from './types.js';
 
 export function parseDotEnv(text: string): Record<string, string> {
   const values: Record<string, string> = {};
@@ -32,6 +32,11 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env, cwd = proces
   const githubAppPrivateKeyFile = env.GITHUB_APP_PRIVATE_KEY_FILE?.trim() || undefined;
   const appCredentialCount = [githubAppId, githubAppInstallationId, githubAppPrivateKeyFile].filter(Boolean).length;
   if (appCredentialCount !== 0 && appCredentialCount !== 3) throw new Error('GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and GITHUB_APP_PRIVATE_KEY_FILE must be configured together');
+  const githubRepositories = parseRepositories(env.REVIEWER_GITHUB_REPOSITORIES);
+  const pollIntervalMs = integer(env.REVIEWER_POLL_INTERVAL_SECONDS, 60) * 1000;
+  if (pollIntervalMs < 15_000) throw new Error('REVIEWER_POLL_INTERVAL_SECONDS must be at least 15');
+  const maxAutomaticReviewsPerPoll = integer(env.REVIEWER_MAX_AUTOMATIC_REVIEWS_PER_POLL, 1);
+  if (maxAutomaticReviewsPerPoll < 1 || maxAutomaticReviewsPerPoll > 10) throw new Error('REVIEWER_MAX_AUTOMATIC_REVIEWS_PER_POLL must be between 1 and 10');
   return {
     root, dataDir, profile, maxAttempts,
     maxInputTokens: integer(env.REVIEWER_MAX_INPUT_TOKENS, 32_768),
@@ -47,7 +52,20 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env, cwd = proces
     githubAppInstallationId,
     githubAppPrivateKeyFile,
     githubToken: env.GITHUB_TOKEN?.trim() || undefined,
+    githubRepositories,
+    pollIntervalMs,
+    includeDrafts: env.REVIEWER_INCLUDE_DRAFTS === 'true',
+    maxAutomaticReviewsPerPoll,
   };
+}
+
+function parseRepositories(value: string | undefined): readonly RepositoryRef[] {
+  if (!value?.trim()) return [];
+  return value.split(',').map((entry) => {
+    const [owner, repo, ...extra] = entry.trim().split('/');
+    if (!owner || !repo || extra.length > 0 || !/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo)) throw new Error(`invalid REVIEWER_GITHUB_REPOSITORIES entry: ${entry}`);
+    return { owner, repo };
+  });
 }
 
 function parseProfile(value: string): ReviewProfile {
