@@ -76,7 +76,7 @@ export async function handleOperatorRequest(request: Request, env: WorkerEnv): P
   if (path !== '/requests' || request.method !== 'POST') return json({ error: 'not_found' }, 404);
   if (!env.OPERATOR_TOKEN || request.headers.get('Authorization') !== `Bearer ${env.OPERATOR_TOKEN}`) return json({ error: 'unauthorized' }, 401);
   let body: unknown;
-  try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
+  try { body = JSON.parse(await bodyText(request)); } catch (error) { const tooLarge = error instanceof Error && error.message === 'payload_too_large'; return json({ error: tooLarge ? 'payload_too_large' : 'invalid_json' }, tooLarge ? 413 : 400); }
   try {
     const config = configFromEnv(env);
     const row = manualRequest(body, config, 'operator', crypto.randomUUID(), Date.now());

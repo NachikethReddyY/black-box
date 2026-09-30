@@ -15,6 +15,31 @@ This Worker accepts signed GitHub `pull_request` and `push` webhooks and stores 
 
 ## Local setup
 
+### Operator-triggered exact-commit runs
+
+The Worker exposes an authenticated `POST /requests` endpoint for the Black Box CLI. It creates the same durable request record used by signed GitHub events, so agents can run trusted checks without opening a pull request.
+
+Required JSON:
+
+```json
+{
+  "repository": "NachikethReddy/AMR-Fan-App",
+  "source_ref": "refs/heads/main",
+  "commit_sha": "40-character-commit-sha"
+}
+```
+
+Optional fields are `workflow_file`, `workflow_ref`, `head_sha`, `base_sha`, `pr_number`, and `idempotency_key`. The repository and workflow must be allowlisted. The request is queued for the existing scheduled reconciler; it is not successful until GitHub reports the required jobs and exact checkout verification.
+
+```bash
+curl -X POST "$BLACKBOX_URL/requests" \
+  -H "Authorization: Bearer $BLACKBOX_OPERATOR_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"repository":"NachikethReddy/AMR-Fan-App","source_ref":"refs/heads/main","commit_sha":"..."}'
+```
+
+The operator token is a Cloudflare Worker secret. Keep it in a protected WSL environment file, never in this repository or in a workflow input.
+
 ```sh
 pnpm install
 pnpm test
