@@ -85,6 +85,12 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [x] Exercise a real non-draft PR with passing checks; keep automatic merge blocked when the exact head has findings or partial coverage.
 - [ ] Set the GitHub App OAuth client secret and dashboard session secret in Cloudflare.
 
+## Reviewer App contents permission (thread current, 30 September 2026)
+
+- [x] Verify current App and installation permissions without exposing credentials: both report `contents: read`.
+- [x] Document the required GitHub App setting **Contents: Read and write** (`contents: write`) and installation approval, separately from the read-only CI workflow token.
+- [ ] Save the App permission change and verify installation `contents: write`. Browser control was interrupted by user activity; the attempted API update returned HTTP 404 and made no change.
+
 ### CI intelligence backlog
 
 - [x] Add an agent-owned SQLite history for structured test reports, cache events, and bounded searchable logs. Job timeline wiring still needs live runner events.
