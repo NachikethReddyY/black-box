@@ -2,15 +2,19 @@ import { buildContext } from './context.js';
 import { changedRightLines, type PullRequestFile, type PullRequestRef, type PullRequestSummary, type ReviewPreview } from './github.js';
 import { createResponsesProvider } from './provider.js';
 import { runReview } from './pipeline.js';
-import { buildReviewPreview } from './publisher.js';
+import { buildReviewPreview, mergeSummaryBody, summaryCoversHead } from './publisher.js';
 import { ReviewStore } from './store.js';
 import type { ProviderAdapter, ReviewConfig, ReviewResult, Snapshot } from './types.js';
 
 export interface AutomaticClient {
+  getPullRequest(ref: PullRequestRef): Promise<{ readonly headSha: string; readonly body: string | null; readonly draft: boolean; readonly state: 'open' | 'closed'; readonly mergeableState?: string }>;
   listOpenPullRequests(repository: { readonly owner: string; readonly repo: string }): Promise<readonly PullRequestSummary[]>;
   capturePullRequestSnapshot(ref: PullRequestRef): Promise<Snapshot>;
   listPullRequestFiles(ref: PullRequestRef): Promise<readonly PullRequestFile[]>;
   publishReview(ref: PullRequestRef, payload: ReviewPreview): Promise<{ readonly reviewId: number; readonly url?: string }>;
+  updatePullRequestBody(ref: PullRequestRef, body: string, expectedHeadSha: string): Promise<void>;
+  getCiStatus(ref: PullRequestRef, headSha: string): Promise<{ readonly ready: boolean; readonly pending: boolean; readonly failed: boolean; readonly count: number; readonly details: readonly string[] }>;
+  mergePullRequest(ref: PullRequestRef, headSha: string): Promise<{ readonly sha?: string; readonly url?: string }>;
 }
 
 export interface AutomaticCycle {
@@ -19,6 +23,9 @@ export interface AutomaticCycle {
   readonly skippedProcessed: number;
   readonly reviewed: number;
   readonly published: number;
+  readonly summaries: number;
+  readonly merged: number;
+  readonly waitingForCi: number;
   readonly failed: number;
 }
 
@@ -39,7 +46,7 @@ export class AutomaticReviewer {
 
   async pollOnce(): Promise<AutomaticCycle> {
     const repositories = this.#config.githubRepositories ?? [];
-    let discovered = 0; let skippedDrafts = 0; let skippedProcessed = 0; let reviewed = 0; let published = 0; let failed = 0;
+    let discovered = 0; let skippedDrafts = 0; let skippedProcessed = 0; let reviewed = 0; let published = 0; let summaries = 0; let merged = 0; let waitingForCi = 0; let failed = 0;
     const limit = this.#config.maxAutomaticReviewsPerPoll ?? 1;
     for (const repository of repositories) {
       const pullRequests = await this.#client.listOpenPullRequests(repository);
@@ -47,7 +54,18 @@ export class AutomaticReviewer {
       for (const pullRequest of pullRequests) {
         if (reviewed >= limit) break;
         if (pullRequest.draft && !(this.#config.includeDrafts ?? false)) { skippedDrafts += 1; continue; }
-        if (!this.#store.claimAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 15 * 60_000)) { skippedProcessed += 1; continue; }
+        if (!this.#store.claimAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 15 * 60_000)) {
+          skippedProcessed += 1;
+          if (this.#config.autoMerge) {
+            try {
+              if (await this.tryMerge(pullRequest)) merged += 1; else waitingForCi += 1;
+            } catch (error) {
+              failed += 1;
+              console.error(JSON.stringify({ event: 'automatic_merge_check_failed', repository: `${pullRequest.ref.owner}/${pullRequest.ref.repo}`, pullRequest: pullRequest.ref.number, headSha: pullRequest.headSha, error: error instanceof Error ? error.message : 'unknown error' }));
+            }
+          }
+          continue;
+        }
         reviewed += 1;
         try {
           const snapshot = await this.#client.capturePullRequestSnapshot(pullRequest.ref);
@@ -64,10 +82,32 @@ export class AutomaticReviewer {
             await this.#client.publishReview(pullRequest.ref, payload);
             this.#store.markPublication(result.reviewId, 'published');
             published += 1;
+            this.#store.completeAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 'completed', result.reviewId);
+            let summaryReady = true;
+            if (this.#config.updatePullRequestDescription) {
+              try {
+                const pr = await this.#client.getPullRequest(pullRequest.ref);
+                if (pr.headSha !== pullRequest.headSha) throw new Error('PR head changed before description update');
+                await this.#client.updatePullRequestBody(pullRequest.ref, mergeSummaryBody(pr.body, result), pullRequest.headSha);
+                summaries += 1;
+              } catch (error) {
+                summaryReady = false;
+                failed += 1;
+                console.error(JSON.stringify({ event: 'automatic_summary_failed', repository: `${pullRequest.ref.owner}/${pullRequest.ref.repo}`, pullRequest: pullRequest.ref.number, headSha: pullRequest.headSha, error: error instanceof Error ? error.message : 'unknown error' }));
+              }
+            }
+            if (this.#config.autoMerge && summaryReady && result.outcome === 'completed_clean') {
+              try {
+                if (await this.tryMerge(pullRequest)) merged += 1; else waitingForCi += 1;
+              } catch (error) {
+                failed += 1;
+                console.error(JSON.stringify({ event: 'automatic_merge_check_failed', repository: `${pullRequest.ref.owner}/${pullRequest.ref.repo}`, pullRequest: pullRequest.ref.number, headSha: pullRequest.headSha, error: error instanceof Error ? error.message : 'unknown error' }));
+              }
+            }
           } else {
             this.#store.markPublication(result.reviewId, 'not_published');
+            this.#store.completeAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 'failed', result.reviewId);
           }
-          this.#store.completeAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, result.outcome === 'completed_clean' || result.outcome === 'completed_findings' ? 'completed' : 'failed', result.reviewId);
         } catch (error) {
           failed += 1;
           this.#store.completeAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 'failed');
@@ -75,7 +115,26 @@ export class AutomaticReviewer {
         }
       }
     }
-    return { discovered, skippedDrafts, skippedProcessed, reviewed, published, failed };
+    return { discovered, skippedDrafts, skippedProcessed, reviewed, published, summaries, merged, waitingForCi, failed };
+  }
+
+  async tryMerge(pullRequest: PullRequestSummary): Promise<boolean> {
+    const record = this.#store.getAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha);
+    if (!record || record.status !== 'completed' || !record.reviewId) return false;
+    const result = this.#store.getReview(record.reviewId);
+    if (!result || result.outcome !== 'completed_clean') return false;
+    const pr = await this.#client.getPullRequest(pullRequest.ref);
+    if (pr.state !== 'open' || pr.draft || pr.headSha !== pullRequest.headSha) return false;
+    if (this.#config.updatePullRequestDescription && !summaryCoversHead(pr.body, pullRequest.headSha)) {
+      await this.#client.updatePullRequestBody(pullRequest.ref, mergeSummaryBody(pr.body, result), pullRequest.headSha);
+      const updated = await this.#client.getPullRequest(pullRequest.ref);
+      if (updated.headSha !== pullRequest.headSha || !summaryCoversHead(updated.body, pullRequest.headSha)) return false;
+    }
+    const ci = await this.#client.getCiStatus(pullRequest.ref, pullRequest.headSha);
+    if (!ci.ready) return false;
+    await this.#client.mergePullRequest(pullRequest.ref, pullRequest.headSha);
+    this.#store.markAutomaticMerged(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha);
+    return true;
   }
 }
 

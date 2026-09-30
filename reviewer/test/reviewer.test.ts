@@ -16,6 +16,7 @@ import type { Candidate, ProviderResponse, ReviewConfig, ReviewId } from '../src
 import { tempRepo, run } from './helpers.js';
 import { changedRightLines, GitHubApi } from '../src/github.js';
 import { buildReviewPreview } from '../src/publisher.js';
+import { mergeSummaryBody, SUMMARY_END, SUMMARY_START, summaryCoversHead } from '../src/publisher.js';
 import { listenStatusServer } from '../src/status-server.js';
 import { createGitHubAppJwt, createGitHubInstallationToken, githubAppCredentials } from '../src/github-app.js';
 import { AutomaticReviewer } from '../src/automation.js';
@@ -100,17 +101,21 @@ test('automatic polling skips drafts, reviews one new head, and suppresses it on
   const snapshot = captureSnapshot(cfg, 'ref', 'HEAD');
   const requests: string[] = [];
   const client = {
+    async getPullRequest() { return { headSha: 'ready-head', body: null, draft: false, state: 'open' as const, mergeableState: 'blocked' }; },
     async listOpenPullRequests() { return [{ ref: { owner: 'owner', repo: 'repo', number: 1 }, headSha: 'draft-head', draft: true, title: 'Draft' }, { ref: { owner: 'owner', repo: 'repo', number: 2 }, headSha: 'ready-head', draft: false, title: 'Ready' }]; },
     async capturePullRequestSnapshot() { return { ...snapshot, headSha: 'ready-head', changedPaths: ['index.ts'] }; },
     async listPullRequestFiles() { return [{ path: 'index.ts', status: 'modified', additions: 1, deletions: 0, patch: '@@ -1 +1 @@\n+changed' }]; },
     async publishReview(_ref: unknown, payload: { commit_id: string }) { requests.push(payload.commit_id); return { reviewId: 99 }; },
+    async updatePullRequestBody() {},
+    async getCiStatus() { return { ready: false, pending: true, failed: false, count: 1, details: ['ci:pending'] }; },
+    async mergePullRequest() { throw new Error('must not merge in fixture'); },
   };
   const store = new ReviewStore(cfg);
   const reviewer = new AutomaticReviewer(cfg, store, client);
   const first = await reviewer.pollOnce();
-  assert.deepEqual(first, { discovered: 2, skippedDrafts: 1, skippedProcessed: 0, reviewed: 1, published: 1, failed: 0 });
+  assert.deepEqual(first, { discovered: 2, skippedDrafts: 1, skippedProcessed: 0, reviewed: 1, published: 1, summaries: 0, merged: 0, waitingForCi: 0, failed: 0 });
   const second = await reviewer.pollOnce();
-  assert.deepEqual(second, { discovered: 2, skippedDrafts: 1, skippedProcessed: 1, reviewed: 0, published: 0, failed: 0 });
+  assert.deepEqual(second, { discovered: 2, skippedDrafts: 1, skippedProcessed: 1, reviewed: 0, published: 0, summaries: 0, merged: 0, waitingForCi: 0, failed: 0 });
   assert.deepEqual(requests, ['ready-head']);
   store.close();
 });
@@ -120,10 +125,14 @@ test('automatic polling backs off an incomplete review instead of marking it com
   const cfg = config(root, { profile: 'economy_cloud_luna_v1', cloudBudgetUsd: 0.10, githubRepositories: [{ owner: 'owner', repo: 'repo' }] });
   const snapshot = captureSnapshot(cfg, 'ref', 'HEAD');
   const client = {
+    async getPullRequest() { return { headSha: snapshot.headSha ?? 'head', body: null, draft: false, state: 'open' as const, mergeableState: 'blocked' }; },
     async listOpenPullRequests() { return [{ ref: { owner: 'owner', repo: 'repo', number: 1 }, headSha: snapshot.headSha ?? 'head', draft: false, title: 'Ready' }]; },
     async capturePullRequestSnapshot() { return snapshot; },
     async listPullRequestFiles() { return []; },
     async publishReview() { throw new Error('must not publish incomplete results'); },
+    async updatePullRequestBody() {},
+    async getCiStatus() { return { ready: false, pending: true, failed: false, count: 1, details: ['ci:pending'] }; },
+    async mergePullRequest() { throw new Error('must not merge in fixture'); },
   };
   const store = new ReviewStore(cfg);
   const reviewer = new AutomaticReviewer(cfg, store, client, async () => ({ reviewId: 'review-incomplete' as ReviewId, snapshot, profile: cfg.profile, outcome: 'incomplete', candidates: [], verifications: [], findings: [], secretFindings: [], coverage: { selectedPaths: [], omittedPaths: [], complete: false }, attempts: 0, estimatedCostUsd: 0, error: 'fixture' }));
@@ -131,6 +140,44 @@ test('automatic polling backs off an incomplete review instead of marking it com
   const second = await reviewer.pollOnce();
   assert.equal(first.failed, 0);
   assert.equal(second.skippedProcessed, 1);
+  store.close();
+});
+
+test('PR summaries replace only the BlackBox marker block', () => {
+  const root = tempRepo();
+  const cfg = config(root);
+  const snapshot = captureSnapshot(cfg, 'ref', 'HEAD');
+  const result = { reviewId: id('review', 'summary') as ReviewId, snapshot: { ...snapshot, headSha: 'head' }, profile: 'static_only' as const, outcome: 'completed_clean' as const, candidates: [], verifications: [], findings: [], secretFindings: [], coverage: { selectedPaths: ['index.ts'], omittedPaths: [], complete: true }, attempts: 0, estimatedCostUsd: 0 };
+  const original = `Keep this human text.\n${SUMMARY_START}\nold\n${SUMMARY_END}\nAfter text.`;
+  const updated = mergeSummaryBody(original, result);
+  assert.match(updated, /Keep this human text/);
+  assert.match(updated, /After text/);
+  assert.match(updated, /No supported findings/);
+  assert.equal((updated.match(new RegExp(SUMMARY_START, 'g')) ?? []).length, 1);
+  assert.equal(summaryCoversHead(updated, 'head'), true);
+  assert.throws(() => mergeSummaryBody(`${SUMMARY_START}\nonly`, result), /marker pair/);
+});
+
+test('automatic clean reviews squash merge only after successful CI and clean mergeability', async () => {
+  const root = tempRepo();
+  const cfg = config(root, { profile: 'static_only', githubRepositories: [{ owner: 'owner', repo: 'repo' }], autoMerge: true });
+  const snapshot = captureSnapshot(cfg, 'ref', 'HEAD');
+  let mergeCalls = 0;
+  const client = {
+    async getPullRequest() { return { headSha: snapshot.headSha ?? 'head', body: null, draft: false, state: 'open' as const, mergeableState: 'clean' }; },
+    async listOpenPullRequests() { return [{ ref: { owner: 'owner', repo: 'repo', number: 1 }, headSha: snapshot.headSha ?? 'head', draft: false, title: 'Ready' }]; },
+    async capturePullRequestSnapshot() { return snapshot; },
+    async listPullRequestFiles() { return []; },
+    async publishReview() { return { reviewId: 100 }; },
+    async updatePullRequestBody() {},
+    async getCiStatus() { return { ready: true, pending: false, failed: false, count: 2, details: ['build:success', 'test:success'] }; },
+    async mergePullRequest(_ref: unknown, headSha: string) { assert.equal(headSha, snapshot.headSha); mergeCalls += 1; return { sha: 'merge-sha' }; },
+  };
+  const store = new ReviewStore(cfg);
+  const cycle = await new AutomaticReviewer(cfg, store, client).pollOnce();
+  assert.equal(cycle.merged, 1);
+  assert.equal(mergeCalls, 1);
+  assert.equal(store.getAutomaticHead('owner', 'repo', 1, snapshot.headSha ?? 'head')?.status, 'merged');
   store.close();
 });
 

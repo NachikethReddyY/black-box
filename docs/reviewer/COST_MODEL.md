@@ -2,7 +2,7 @@
 
 ## Policy
 
-Static analysis and local inference can run without cloud spend. When a TokenRouter key is configured, an explicit `review` or `pr-review` command authorizes one bounded cloud run after the provider, model, pricing registry, key reference, profile, and reservation are valid. `REVIEWER_LOCAL_ONLY=true` disables cloud calls. Automatic escalation, embeddings, scheduled reports, macros, webhook triggers, and retries have no authority by default. A PR comment cannot grant spend.
+Static analysis and local inference can run without cloud spend. When a TokenRouter key is configured, an explicit `review`, `pr-review`, or configured automatic watcher authorizes one bounded cloud run after the provider, model, pricing registry, key reference, profile, and reservation are valid. `REVIEWER_LOCAL_ONLY=true` disables cloud calls. Automatic escalation, embeddings, scheduled reports, macros, webhook triggers, and retries have no authority by default. A PR comment cannot grant spend.
 
 The cost objective is lower cost per supported, actionable finding than the chosen comparison baseline. The system must report the full cost surface: provider usage, cache and retry liability, GitHub/API requests, indexing and analyzer time, local CPU/RAM/disk, knowledge-base maintenance, and operator time where measurable. Never optimize by hiding omitted files, skipping verification, or publishing fewer comments without showing the resulting recall and coverage.
 

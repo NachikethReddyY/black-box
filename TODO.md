@@ -81,3 +81,5 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [x] Reuse the exact snapshot, pipeline, changed-line publisher, and App identity for each new PR head.
 - [x] Add restart, draft filtering, duplicate, and head-change tests without live model calls.
 - [x] Add WSL2 watcher startup instructions and verify the local watcher remains within the per-review budget.
+- [x] Add marker-owned PR summaries and fail-closed CI-gated squash merge policy.
+- [ ] Verify a real non-draft PR with passing checks before allowing an automatic merge.

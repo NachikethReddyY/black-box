@@ -41,7 +41,7 @@ function loadDotEnv(): void {
 
 function doctor(): void {
   const config = configFromEnv();
-  console.log(JSON.stringify({ root: config.root, dataDir: config.dataDir, profile: config.profile, maxAttempts: config.maxAttempts, cloudBudgetUsd: config.cloudBudgetUsd, cloudKeyConfigured: Boolean(config.openAiApiKey || config.tokenRouterApiKey), githubAppConfigured: Boolean(githubAppCredentials(config)), personalGithubTokenConfigured: Boolean(config.githubToken), publication: 'PR COMMENT via GitHub App installation identity only' }, null, 2));
+  console.log(JSON.stringify({ root: config.root, dataDir: config.dataDir, profile: config.profile, maxAttempts: config.maxAttempts, cloudBudgetUsd: config.cloudBudgetUsd, cloudKeyConfigured: Boolean(config.openAiApiKey || config.tokenRouterApiKey), githubAppConfigured: Boolean(githubAppCredentials(config)), personalGithubTokenConfigured: Boolean(config.githubToken), automaticRepositories: config.githubRepositories ?? [], pollIntervalMs: config.pollIntervalMs ?? 60_000, includeDrafts: config.includeDrafts ?? false, updatePullRequestDescription: config.updatePullRequestDescription ?? false, autoMerge: config.autoMerge ?? false, publication: 'PR COMMENT via GitHub App installation identity only' }, null, 2));
 }
 
 function status(): void {

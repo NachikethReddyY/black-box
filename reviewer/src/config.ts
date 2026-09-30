@@ -56,6 +56,8 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env, cwd = proces
     pollIntervalMs,
     includeDrafts: env.REVIEWER_INCLUDE_DRAFTS === 'true',
     maxAutomaticReviewsPerPoll,
+    updatePullRequestDescription: env.REVIEWER_UPDATE_PR_DESCRIPTION === 'true',
+    autoMerge: env.REVIEWER_AUTO_MERGE === 'true',
   };
 }
 

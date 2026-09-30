@@ -113,7 +113,7 @@ A review can also become `superseded` when the PR head changes. It may retain pr
 
 Every run has a machine-readable outcome: `completed_clean`, `completed_findings`, `incomplete`, `errored`, `cancelled`, `superseded`, `unauthorized`, or `awaiting_budget`. `completed_findings` renders an advisory “Review completed with findings” summary when supported findings remain. It does not approve, merge, or block a branch by itself.
 
-A later approvability or required-check agent can map these outcomes to GitHub check conclusions only after the owner configures the policy and confirms the repository plan supports enforcement. Incomplete, errored, unavailable, and budget-exhausted mandatory work must never become a passing or neutral merge-satisfying result by accident.
+A later approvability or required-check agent can map these outcomes to GitHub check conclusions only after the owner configures the policy and confirms the repository plan supports enforcement. The automatic merge gate remains separate: it requires a clean review, completed successful checks, a clean mergeable state, a non-draft open PR, and an unchanged exact head. Incomplete, errored, unavailable, and budget-exhausted mandatory work must never become a passing or neutral merge-satisfying result by accident.
 
 ## GitHub inline review threads
 
@@ -144,7 +144,7 @@ GitHub owns the visual thread presentation, including collapsed files, “outdat
 
 ## PR description and publication outbox
 
-The summary composer has two modes. P1 renders a preview without mutating GitHub. P2 can update a marker-owned block after explicit authorization. The planned markers are:
+The summary composer has two modes. A preview renders without mutating GitHub. The automatic watcher can update a marker-owned block when `REVIEWER_UPDATE_PR_DESCRIPTION=true`; it preserves all text outside the block. The planned markers are:
 
 ```html
 <!-- BlackBox pull request summary starts here -->

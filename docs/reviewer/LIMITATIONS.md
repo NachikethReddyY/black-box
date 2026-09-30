@@ -34,6 +34,7 @@ The competitive goal is a measured quality/cost advantage on the owner's work, n
 
 - The supported host is the owner's Windows PC with WSL2. A powered-off, sleeping, disconnected, or resource-starved PC delays reviews. There is no automatic hosted runner, Daytona host, or cloud GPU fallback.
 - WSL2 memory, CPU, filesystem performance, Docker availability, and process limits are machine-specific. Windows RAM does not equal the review process's usable budget.
+- Automatic polling and merge require the WSL2 watcher to remain running. If the PC sleeps, loses network, or WSL stops, no review or merge happens until the watcher resumes. A PR with no check runs is deliberately never auto-merged.
 - SQLite, Git worktrees, snapshots, and indexes should remain on the WSL2 Linux filesystem. Windows-mounted paths, OneDrive, and network shares can add locking, latency, and file-notification failures and are not supported for the active data directory.
 - SQLite is a single-machine store. It must not be placed on a network share or treated as a distributed queue.
 - Local models can be slow, unavailable, memory hungry, or incapable of strict schemas/tool calls. The gateway may reject a profile or use a server-built packet; it must not silently switch providers.

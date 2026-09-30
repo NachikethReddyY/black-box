@@ -11,6 +11,12 @@ export interface Reservation {
   readonly status: 'reserved' | 'reconciled' | 'unknown';
 }
 
+export interface AutomaticHeadRecord {
+  readonly status: 'processing' | 'completed' | 'failed' | 'merged';
+  readonly reviewId?: string;
+  readonly leaseUntil: number;
+}
+
 export class ReviewStore {
   readonly #db: DatabaseSync;
   readonly dbPath: string;
@@ -135,7 +141,7 @@ export class ReviewStore {
     this.#db.exec('BEGIN IMMEDIATE');
     try {
       const existing = this.#db.prepare('SELECT status, lease_until FROM automatic_heads WHERE head_key = ?').get(headKey) as { status: string; lease_until: number } | undefined;
-      if (existing?.status === 'completed' || (existing?.status === 'processing' && existing.lease_until > now) || (existing?.status === 'failed' && existing.lease_until > now)) {
+      if (existing?.status === 'completed' || existing?.status === 'merged' || (existing?.status === 'processing' && existing.lease_until > now) || (existing?.status === 'failed' && existing.lease_until > now)) {
         this.#db.exec('COMMIT');
         return false;
       }
@@ -153,6 +159,17 @@ export class ReviewStore {
   completeAutomaticHead(owner: string, repo: string, pullNumber: number, headSha: string, status: 'completed' | 'failed', reviewId?: string, retryAfterMs = 900_000, now = Date.now()): void {
     const headKey = `${owner}/${repo}#${pullNumber}@${headSha}`;
     this.#db.prepare('UPDATE automatic_heads SET status = ?, review_id = ?, lease_until = ?, updated_at = ? WHERE head_key = ?').run(status, reviewId ?? null, status === 'completed' ? Number.MAX_SAFE_INTEGER : now + retryAfterMs, new Date(now).toISOString(), headKey);
+  }
+
+  getAutomaticHead(owner: string, repo: string, pullNumber: number, headSha: string): AutomaticHeadRecord | undefined {
+    const headKey = `${owner}/${repo}#${pullNumber}@${headSha}`;
+    const row = this.#db.prepare('SELECT status, review_id, lease_until FROM automatic_heads WHERE head_key = ?').get(headKey) as { status: AutomaticHeadRecord['status']; review_id: string | null; lease_until: number } | undefined;
+    return row ? { status: row.status, reviewId: row.review_id ?? undefined, leaseUntil: row.lease_until } : undefined;
+  }
+
+  markAutomaticMerged(owner: string, repo: string, pullNumber: number, headSha: string): void {
+    const headKey = `${owner}/${repo}#${pullNumber}@${headSha}`;
+    this.#db.prepare("UPDATE automatic_heads SET status = 'merged', updated_at = ? WHERE head_key = ? AND status = 'completed'").run(new Date().toISOString(), headKey);
   }
 
   listReviews(): readonly { reviewId: string; snapshotId: string; profile: string; outcome: string; createdAt: string }[] {

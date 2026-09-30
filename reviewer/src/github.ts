@@ -1,7 +1,8 @@
 export interface PullRequestRef { readonly owner: string; readonly repo: string; readonly number: number; }
-export interface PullRequestSnapshot { readonly ref: PullRequestRef; readonly baseSha: string; readonly headSha: string; readonly title: string; readonly body: string | null; readonly draft: boolean; }
+export interface PullRequestSnapshot { readonly ref: PullRequestRef; readonly baseSha: string; readonly headSha: string; readonly title: string; readonly body: string | null; readonly draft: boolean; readonly state: 'open' | 'closed'; readonly mergeableState?: string; }
 export interface PullRequestSummary { readonly ref: PullRequestRef; readonly headSha: string; readonly draft: boolean; readonly title: string; }
 export interface PullRequestFile { readonly path: string; readonly status: string; readonly additions: number; readonly deletions: number; readonly patch?: string; }
+export interface CiStatus { readonly ready: boolean; readonly pending: boolean; readonly failed: boolean; readonly count: number; readonly details: readonly string[]; }
 
 export function changedRightLines(files: readonly PullRequestFile[]): ReadonlyMap<string, ReadonlySet<number>> {
   const result = new Map<string, Set<number>>();
@@ -30,6 +31,9 @@ export interface GitHubClient {
   previewReview(ref: PullRequestRef, payload: ReviewPreview): ReviewPreview;
   publishReview(ref: PullRequestRef, payload: ReviewPreview): Promise<{ readonly reviewId: number; readonly url?: string }>;
   listOpenPullRequests(repository: { readonly owner: string; readonly repo: string }): Promise<readonly PullRequestSummary[]>;
+  updatePullRequestBody(ref: PullRequestRef, body: string, expectedHeadSha: string): Promise<void>;
+  getCiStatus(ref: PullRequestRef, headSha: string): Promise<CiStatus>;
+  mergePullRequest(ref: PullRequestRef, headSha: string): Promise<{ readonly sha?: string; readonly url?: string }>;
 }
 
 export interface ReviewPreview { readonly commit_id: string; readonly event: 'COMMENT'; readonly body: string; readonly comments: readonly { readonly path: string; readonly line: number; readonly side: 'RIGHT' | 'LEFT'; readonly body: string }[]; }
@@ -43,7 +47,7 @@ export class GitHubApi implements GitHubClient {
   async getPullRequest(ref: PullRequestRef): Promise<PullRequestSnapshot> {
     const row = record(await this.#request(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/pulls/${ref.number}`));
     const base = record(row.base); const head = record(row.head);
-    return { ref, baseSha: string(base.sha), headSha: string(head.sha), title: string(row.title), body: row.body === null ? null : string(row.body), draft: row.draft === true };
+    return { ref, baseSha: string(base.sha), headSha: string(head.sha), title: string(row.title), body: row.body === null ? null : string(row.body), draft: row.draft === true, state: row.state === 'closed' ? 'closed' : 'open', mergeableState: typeof row.mergeable_state === 'string' ? row.mergeable_state : undefined };
   }
 
   async listOpenPullRequests(repository: { readonly owner: string; readonly repo: string }): Promise<readonly PullRequestSummary[]> {
@@ -83,6 +87,39 @@ export class GitHubApi implements GitHubClient {
       body: JSON.stringify(payload),
     }));
     return { reviewId: integer(row.id), url: typeof row.html_url === 'string' ? row.html_url : undefined };
+  }
+
+  async updatePullRequestBody(ref: PullRequestRef, body: string, expectedHeadSha: string): Promise<void> {
+    if (!this.#token) throw new Error('GitHub PR updates require a write token');
+    const current = await this.getPullRequest(ref);
+    if (current.state !== 'open') throw new Error('cannot update a closed pull request');
+    if (current.headSha !== expectedHeadSha) throw new Error(`PR head changed before description update: expected ${expectedHeadSha}, found ${current.headSha}`);
+    await this.#request(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/pulls/${ref.number}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ body }) });
+  }
+
+  async getCiStatus(ref: PullRequestRef, headSha: string): Promise<CiStatus> {
+    const [checksValue, statusValue] = await Promise.all([
+      this.#request(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/commits/${encodeURIComponent(headSha)}/check-runs?per_page=100`),
+      this.#request(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/commits/${encodeURIComponent(headSha)}/status`),
+    ]);
+    const checks = record(checksValue); const checkRuns = Array.isArray(checks.check_runs) ? checks.check_runs : [];
+    const status = record(statusValue); const statuses = Array.isArray(status.statuses) ? status.statuses : [];
+    const details: string[] = []; let pending = false; let failed = false;
+    for (const value of checkRuns) { const row = record(value); const name = string(row.name); const conclusion = row.conclusion === null ? null : string(row.conclusion); details.push(`${name}:${conclusion ?? 'pending'}`); if (conclusion === null || row.status !== 'completed') pending = true; else if (!['success', 'neutral', 'skipped'].includes(conclusion)) failed = true; }
+    for (const value of statuses) { const row = record(value); const context = string(row.context); const state = string(row.state); details.push(`${context}:${state}`); if (state === 'pending') pending = true; else if (state !== 'success') failed = true; }
+    const count = checkRuns.length + statuses.length;
+    return { ready: count > 0 && !pending && !failed, pending, failed, count, details };
+  }
+
+  async mergePullRequest(ref: PullRequestRef, headSha: string): Promise<{ readonly sha?: string; readonly url?: string }> {
+    if (!this.#token) throw new Error('GitHub merge requires a write token');
+    const current = await this.getPullRequest(ref);
+    if (current.state !== 'open' || current.draft) throw new Error('pull request is not ready to merge');
+    if (current.headSha !== headSha) throw new Error(`PR head changed before merge: expected ${headSha}, found ${current.headSha}`);
+    if (current.mergeableState !== 'clean') throw new Error(`GitHub mergeable state is ${current.mergeableState ?? 'unknown'}`);
+    const row = record(await this.#request(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/pulls/${ref.number}/merge`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sha: headSha, merge_method: 'squash' }) }));
+    if (row.merged !== true) throw new Error(typeof row.message === 'string' ? row.message : 'GitHub did not merge the pull request');
+    return { sha: typeof row.sha === 'string' ? row.sha : undefined, url: typeof row.html_url === 'string' ? row.html_url : undefined };
   }
 
   async capturePullRequestSnapshot(ref: PullRequestRef): Promise<Snapshot> {

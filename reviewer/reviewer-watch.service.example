@@ -5,9 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/reviewer/BlackBox/reviewer
-EnvironmentFile=/home/reviewer/.config/blackbox-reviewer.env
-ExecStart=/usr/bin/pnpm run watch
+WorkingDirectory=/home/vbook/BlackBox/reviewer-service/reviewer
+EnvironmentFile=/home/vbook/BlackBox/reviewer-service/.env
+ExecStart=/home/vbook/.nvm/versions/node/v24.18.0/bin/pnpm run watch
 Restart=on-failure
 RestartSec=15
 KillSignal=SIGINT

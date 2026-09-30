@@ -63,4 +63,4 @@ Rotate GitHub/model credentials through protected local storage; revoke old cred
 
 ## Operational definition of done
 
-The owner can start without cloud credentials, request a static or explicitly local review, see exact scope and coverage, recover from Windows/WSL2 restart, sleep, offline, or relay failure, export data, and prove no paid call or public mutation happened without authorization. Runtime execution and automatic merge remain disabled until their separate security gates pass.
+The owner can start without cloud credentials, request a static or explicitly local review, see exact scope and coverage, recover from Windows/WSL2 restart, sleep, offline, or relay failure, export data, and prove no paid call or public mutation happened without authorization. Runtime execution remains disabled. Automatic squash merge is opt-in and only runs after the exact-head review is clean, completed CI is successful, the PR is open and non-draft, and GitHub reports a clean mergeable state.
