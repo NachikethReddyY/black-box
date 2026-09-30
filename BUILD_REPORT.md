@@ -5,9 +5,9 @@ Branch: `t3code/reviewer-project-scope`
 
 ## Outcome
 
-The repository now contains a connected P1 reviewer core in `reviewer/`. It captures exact local or GitHub PR snapshots, scans and redacts secrets before model packets, extracts bounded TypeScript context, runs a static review, supports an explicitly authorized four-attempt cloud profile through typed adapters, verifies candidates, persists evidence and cost state in SQLite, and renders a GitHub publication preview with changed-line anchors.
+The repository now contains a connected P1 reviewer core in `reviewer/`. It captures exact local or GitHub PR snapshots, scans and redacts secrets before model packets, extracts bounded TypeScript context, runs correctness and security specialists, verifies candidates, persists evidence and cost state in SQLite, and can publish one bounded GitHub `COMMENT` review with changed-line anchors.
 
-The default profile is local and static. GitHub publication, PR-body mutation, runtime execution, automatic triggers, and generated fixes remain disabled.
+If `LUNA_API_KEY` is present, the default route is direct Luna with a hard `$0.10` per-PR reservation. `REVIEWER_LOCAL_ONLY=true` selects static-only mode. PR-body mutation, runtime execution, automatic triggers, and generated fixes remain disabled.
 
 ## Implemented
 
@@ -16,11 +16,11 @@ The default profile is local and static. GitHub publication, PR-body mutation, r
 - Local secret detection and redaction before outbound model context.
 - TypeScript AST symbols, changed-file context, test selection, path bounds, and omitted-scope reporting.
 - Durable reviews, reservations, attempts, lease generation, cost ceilings, and preview outbox records.
-- Direct OpenAI Responses route with medium reasoning, strict JSON schema, tools disabled, and no SDK retry loop.
+- Direct OpenAI Responses route with medium reasoning, strict JSON schema, tools disabled, no SDK retry loop, and a bounded output budget.
 - Explicit TokenRouter route as a separately selected adapter. No automatic provider fallback.
 - Correctness specialist, security specialist, candidate deduplication, skeptical verifier, causal-change checks, persistent finding IDs, and revision-bound occurrences.
-- GitHub metadata, file list, archive capture, safe redirect handling, injected transport tests, and preview-only review rendering.
-- CLI commands: `doctor`, `review`, `pr-preview`, `status`, `backup`, `restore`, `export`, and `help`.
+- GitHub metadata, file list, archive capture, safe redirect handling, changed-line filtering, injected transport tests, and PR-only COMMENT publication.
+- CLI commands: `doctor`, `review`, `pr-preview`, `pr-review`, `status`, `backup`, `restore`, `export`, and `help`.
 - Loopback-only authenticated status service via `serve`, with a WSL2 systemd example.
 - Offline clean-control and seeded-bug evaluation reports under `reviewer/evidence/`.
 
@@ -29,11 +29,11 @@ The default profile is local and static. GitHub publication, PR-body mutation, r
 | Check | Result | Evidence |
 |---|---|---|
 | Reviewer typecheck | Passed | `cd reviewer && pnpm typecheck` |
-| Reviewer tests | Passed, 12 tests | `cd reviewer && pnpm test` |
+| Reviewer tests | Passed, 14 tests | `cd reviewer && pnpm test` |
 | CLI lifecycle | Passed: review, status, export, backup, restore | `reviewer` commands with temporary data directories |
 | Offline smoke evaluation | Passed: clean control stayed clean and seeded bug was retained after verification | `cd reviewer && pnpm run evaluate` |
 | Public PR snapshot | Passed: `psf/requests#7628`, 128 files, exact head captured | `reviewer/evidence/public-pr-preview.json` |
-| GitHub publication | Not run | Adapter is preview-only in P1 |
+| GitHub publication | Adapter and fake transport passed | One live PR publication still awaits the bounded run below |
 | Worker typecheck/tests | Passed, 12 tests | `cd worker && pnpm typecheck && pnpm test` |
 | Dashboard typecheck/build | Passed | `cd dashboard && pnpm typecheck && pnpm build` |
 | Project validation | Passed | `python3 scripts_validate_project.py` |
@@ -42,7 +42,7 @@ The default profile is local and static. GitHub publication, PR-body mutation, r
 
 ## AI and cost status
 
-Live model calls were not run. The presence of `LUNA_API_KEY` and `SPAN_API_KEY` in local `.env` is not treated as spending authorization, so the build used fake providers and deterministic fixtures only. Actual inference spend is `$0` and unknown provider liability is `$0`.
+The configured route is direct Luna. The application reserves at most `$0.10` for one PR review and records returned usage. Before the live run, actual inference spend is `$0`.
 
 The offline evaluation is an engineering smoke test, not a quality benchmark. It has one clean control and one seeded bug fixture. It does not establish precision, recall, latency, or model quality on real pull requests.
 
@@ -56,7 +56,7 @@ The package is designed for the Windows PC's WSL2 Linux filesystem. The OrbStack
 - Context selection is bounded and reports omitted paths. A partial review never claims full repository coverage.
 - Provider usage is estimated from returned token counts. A dropped response remains incomplete and is not silently retried.
 - Model findings are advisory and require verifier support. Runtime evidence cannot be claimed in P1.
-- GitHub comments are rendered as a preview. A separate least-privilege publisher and an authorized live publication test are still required.
+- `pr-review` publishes only the exact PR-head `COMMENT` review. It does not edit PR descriptions, create issue comments, request changes, or merge.
 - T-22, feedback learning, knowledge-base lifecycle, runtime sandbox execution, and scheduled/automatic agents remain P2/P3 work.
 - The existing Windows/WSL2 host still needs a direct deployment run when it is available.
 - Invoking the CLI from `reviewer/` discovers the enclosing Git worktree; `REVIEWER_ROOT` remains the explicit override.
@@ -70,10 +70,11 @@ pnpm --dir reviewer install --ignore-scripts
 pnpm --dir reviewer run doctor
 pnpm --dir reviewer run review -- working_tree
 pnpm --dir reviewer run pr-preview -- OWNER REPO NUMBER
+pnpm --dir reviewer run pr-review -- OWNER REPO NUMBER
 REVIEWER_STATUS_TOKEN="$(openssl rand -hex 32)" pnpm --dir reviewer run serve
 ```
 
-The default review is static-only. To make one cloud request under an explicit ceiling, set `REVIEWER_PROFILE`, `REVIEWER_CLOUD_BUDGET_USD`, and `REVIEWER_AUTHORIZE_CLOUD=true` for that command. Stop `serve` with `Ctrl-C` or `SIGTERM`. Use `reviewer/reviewer.service.example` only on a WSL2 installation that provides systemd; no host service was changed by this build.
+With `LUNA_API_KEY` in `.env`, `pr-review OWNER REPO NUMBER` runs the bounded cloud review and publishes one PR comment review. `GITHUB_TOKEN` is optional when `gh auth status` is already authenticated. Set `REVIEWER_LOCAL_ONLY=true` for static-only operation. Stop `serve` with `Ctrl-C` or `SIGTERM`. Use `reviewer/reviewer.service.example` only on a WSL2 installation that provides systemd; no host service was changed by this build.
 
 ## Checkpoint
 

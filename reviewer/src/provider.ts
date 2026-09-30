@@ -30,7 +30,7 @@ export class ResponsesProvider implements ProviderAdapter {
       method: 'POST',
       signal: AbortSignal.timeout(180_000),
       headers: { authorization: `Bearer ${this.#apiKey}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ model: this.route.modelId, reasoning: { effort: this.route.reasoning }, input: promptFor(request), text: { format: { type: 'json_schema', name: 'review_result', strict: true, schema: schemaFor(request.role) } } }),
+    body: JSON.stringify({ model: this.route.modelId, reasoning: { effort: this.route.reasoning }, max_output_tokens: request.maxOutputTokens, input: promptFor(request), text: { format: { type: 'json_schema', name: 'review_result', strict: true, schema: schemaFor(request.role) } } }),
     });
     const raw: unknown = await response.json();
     if (!response.ok) throw new Error(`provider returned HTTP ${response.status}`);
@@ -46,8 +46,51 @@ function promptFor(request: ProviderRequest): string {
 }
 
 function schemaFor(role: ProviderRequest['role']): Record<string, unknown> {
-  if (role === 'verifier') return { type: 'object', additionalProperties: false, required: ['verifications'], properties: { verifications: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['candidateId', 'decision', 'evidenceChecked', 'causalLink', 'verificationKind', 'reason', 'uncertainty'], properties: { candidateId: { type: 'string' }, decision: { enum: ['supported', 'rejected', 'needs_more_context', 'requires_runtime_validation'] }, evidenceChecked: { type: 'array', items: { type: 'string' } }, causalLink: { enum: ['introduced', 'worsened', 'pre_existing', 'uncertain'] }, verificationKind: { enum: ['model_assessment', 'deterministic_analysis'] }, reason: { type: 'string' }, uncertainty: { type: 'string' } } } } } };
-  return { type: 'object', additionalProperties: false, required: ['candidates'], properties: { candidates: { type: 'array', maxItems: 6, items: { type: 'object' } } } };
+  const evidence = {
+    type: 'array',
+    items: {
+      type: 'object', additionalProperties: false,
+      required: ['path', 'sha256', 'start', 'end', 'side', 'reason'],
+      properties: {
+        path: { type: 'string' }, sha256: { type: 'string' },
+        start: { type: 'integer', minimum: 1 }, end: { type: 'integer', minimum: 1 },
+        side: { enum: ['LEFT', 'RIGHT'] }, reason: { type: 'string' },
+      },
+    },
+  };
+  if (role === 'verifier') return {
+    type: 'object', additionalProperties: false, required: ['verifications'],
+    properties: {
+      verifications: {
+        type: 'array', items: {
+          type: 'object', additionalProperties: false,
+          required: ['candidateId', 'decision', 'evidenceChecked', 'causalLink', 'verificationKind', 'reason', 'uncertainty'],
+          properties: {
+            candidateId: { type: 'string' }, decision: { enum: ['supported', 'rejected', 'needs_more_context', 'requires_runtime_validation'] },
+            evidenceChecked: { type: 'array', items: { type: 'string' } }, causalLink: { enum: ['introduced', 'worsened', 'pre_existing', 'uncertain'] },
+            verificationKind: { enum: ['model_assessment', 'deterministic_analysis'] }, reason: { type: 'string' }, uncertainty: { type: 'string' },
+          },
+        },
+      },
+    },
+  };
+  return {
+    type: 'object', additionalProperties: false, required: ['candidates'],
+    properties: {
+      candidates: {
+        type: 'array', maxItems: 6, items: {
+          type: 'object', additionalProperties: false,
+          required: ['candidateId', 'category', 'severity', 'title', 'trigger', 'expected', 'actual', 'impact', 'changeRelevance', 'causalChangeRef', 'evidence', 'verificationKind', 'status'],
+          properties: {
+            candidateId: { type: 'string' }, category: { enum: ['correctness', 'security', 'performance', 'reliability', 'tests', 'policy'] }, severity: { enum: ['low', 'medium', 'high', 'critical'] },
+            title: { type: 'string' }, trigger: { type: 'string' }, expected: { type: 'string' }, actual: { type: 'string' }, impact: { type: 'string' },
+            changeRelevance: { enum: ['introduced', 'worsened', 'pre_existing', 'uncertain'] }, causalChangeRef: evidence, evidence,
+            verificationKind: { enum: ['model_assessment', 'deterministic_analysis'] }, status: { enum: ['candidate'] },
+          },
+        },
+      },
+    },
+  };
 }
 
 function parseProviderResponse(raw: unknown, request: ProviderRequest): ProviderResponse {

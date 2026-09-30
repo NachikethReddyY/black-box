@@ -17,7 +17,7 @@ export async function runReview(config: ReviewConfig, snapshot: Snapshot, packet
     store.queuePublication(reviewId, snapshot.headSha, { kind: 'preview', result });
     return result;
   }
-  if (!options.authorizeCloud || !options.provider) {
+  if (options.authorizeCloud === false || !options.provider) {
     const result = { ...base, outcome: 'unauthorized' as const, error: 'cloud review requires explicit run authorization and a selected provider route' };
     store.saveResult(result);
     return result;
@@ -41,14 +41,14 @@ export async function runReview(config: ReviewConfig, snapshot: Snapshot, packet
   let verifications: Verification[] = [];
   try {
     for (const role of ['correctness', 'security'] as const) {
-      const response = await attempt(provider, store, reviewId, role, { role, snapshotId: snapshot.id, packet, requestId: `${reviewId}:${role}:0` }, maxCostCents / config.maxAttempts);
+      const response = await attempt(provider, store, reviewId, role, { role, snapshotId: snapshot.id, packet, requestId: `${reviewId}:${role}:0`, maxOutputTokens: config.maxOutputTokens }, maxCostCents / config.maxAttempts);
       attempts += 1;
       estimatedCostUsd += cost(response.inputTokens, response.outputTokens, provider);
       candidates.push(...(response.candidates ?? []));
     }
     candidates = dedupe(candidates);
     if (candidates.length > 0) {
-      const response = await attempt(provider, store, reviewId, 'verifier', { role: 'verifier', snapshotId: snapshot.id, packet, candidates, requestId: `${reviewId}:verifier:0` }, maxCostCents / config.maxAttempts);
+      const response = await attempt(provider, store, reviewId, 'verifier', { role: 'verifier', snapshotId: snapshot.id, packet, candidates, requestId: `${reviewId}:verifier:0`, maxOutputTokens: config.maxOutputTokens }, maxCostCents / config.maxAttempts);
       attempts += 1;
       verifications = validateVerificationSet(candidates, response.verifications ?? []);
     }

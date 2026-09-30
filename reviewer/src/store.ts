@@ -105,6 +105,10 @@ export class ReviewStore {
     this.#db.prepare('INSERT OR REPLACE INTO outbox (outbox_id, review_id, reviewed_head, payload_json, status, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(`out_${reviewId}`, reviewId, reviewedHead, JSON.stringify(payload), 'preview', new Date().toISOString());
   }
 
+  markPublication(reviewId: ReviewId, status: 'published' | 'not_published' | 'unknown'): void {
+    this.#db.prepare('UPDATE outbox SET status = ? WHERE review_id = ?').run(status, reviewId);
+  }
+
   getReview(reviewId: string): ReviewResult | undefined {
     const row = this.#db.prepare('SELECT payload_json FROM reviews WHERE review_id = ?').get(reviewId) as { payload_json: string } | undefined;
     return row ? JSON.parse(row.payload_json) as ReviewResult : undefined;

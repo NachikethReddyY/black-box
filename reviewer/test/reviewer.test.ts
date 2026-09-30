@@ -13,7 +13,7 @@ import { captureSnapshot } from '../src/snapshot.js';
 import { ReviewStore } from '../src/store.js';
 import type { Candidate, ProviderResponse, ReviewConfig, ReviewId } from '../src/types.js';
 import { tempRepo, run } from './helpers.js';
-import { GitHubApi } from '../src/github.js';
+import { changedRightLines, GitHubApi } from '../src/github.js';
 import { buildReviewPreview } from '../src/publisher.js';
 import { listenStatusServer } from '../src/status-server.js';
 
@@ -113,10 +113,10 @@ test('verifier output cannot claim runtime proof or omit a candidate', async () 
   store.close();
 });
 
-test('config defaults to static-only even when API keys exist', () => {
+test('config selects the bounded Luna route when the key is present', () => {
   const cfg = configFromEnv({ LUNA_API_KEY: 'present', SPAN_API_KEY: 'present' }, '/tmp');
-  assert.equal(cfg.profile, 'static_only');
-  assert.equal(cfg.cloudBudgetUsd, 0);
+  assert.equal(cfg.profile, 'economy_cloud_luna_v1');
+  assert.equal(cfg.cloudBudgetUsd, 0.10);
 });
 
 test('config discovers the enclosing worktree when invoked from the reviewer package', () => {
@@ -159,6 +159,27 @@ test('GitHub adapter validates PR metadata and paginates files through an inject
   assert.equal(files[0]?.path, 'index.ts');
   assert.equal(requests.length, 2);
   assert.ok(requests.every((url) => url.startsWith('https://github.test/')));
+});
+
+test('GitHub publisher posts one COMMENT review with only changed-line anchors', async () => {
+  const requests: { url: string; method: string; body?: string }[] = [];
+  const fetcher: typeof fetch = async (input, init) => {
+    const url = String(input);
+    requests.push({ url, method: init?.method ?? 'GET', body: typeof init?.body === 'string' ? init.body : undefined });
+    if (url.endsWith('/pulls/7')) return new Response(JSON.stringify({ base: { sha: 'base' }, head: { sha: 'head' }, title: 'Fixture', body: null }), { status: 200 });
+    if (url.includes('/pulls/7/reviews')) return new Response(JSON.stringify({ id: 42, html_url: 'https://github.test/review/42' }), { status: 200 });
+    throw new Error(`unexpected request ${url}`);
+  };
+  const api = new GitHubApi('write-token', fetcher, 'https://github.test');
+  const published = await api.publishReview({ owner: 'owner', repo: 'repo', number: 7 }, { commit_id: 'head', event: 'COMMENT', body: 'summary', comments: [{ path: 'index.ts', line: 3, side: 'RIGHT', body: 'fix' }] });
+  assert.equal(published.reviewId, 42);
+  assert.equal(requests.at(-1)?.method, 'POST');
+  assert.match(requests.at(-1)?.body ?? '', /"event":"COMMENT"/);
+});
+
+test('GitHub diff parser identifies added right-side lines', () => {
+  const lines = changedRightLines([{ path: 'index.ts', status: 'modified', additions: 2, deletions: 1, patch: '@@ -1,2 +1,3 @@\n old\n-old\n+new\n+newer\n' }]);
+  assert.deepEqual([...lines.get('index.ts') ?? []], [2, 3]);
 });
 
 test('publisher preview keeps exact reviewed head and changed-line anchors', () => {

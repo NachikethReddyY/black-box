@@ -130,6 +130,7 @@ export interface ProviderRequest {
   readonly packet: ContextPacket;
   readonly candidates?: readonly Candidate[];
   readonly requestId: string;
+  readonly maxOutputTokens?: number;
 }
 
 export interface ProviderResponse {

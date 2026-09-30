@@ -2,10 +2,32 @@ export interface PullRequestRef { readonly owner: string; readonly repo: string;
 export interface PullRequestSnapshot { readonly ref: PullRequestRef; readonly baseSha: string; readonly headSha: string; readonly title: string; readonly body: string | null; }
 export interface PullRequestFile { readonly path: string; readonly status: string; readonly additions: number; readonly deletions: number; readonly patch?: string; }
 
+export function changedRightLines(files: readonly PullRequestFile[]): ReadonlyMap<string, ReadonlySet<number>> {
+  const result = new Map<string, Set<number>>();
+  for (const file of files) {
+    const lines = new Set<number>();
+    let right = 0;
+    for (const raw of (file.patch ?? '').split('\n')) {
+      if (raw.startsWith('@@')) {
+        const match = /\+(\d+)(?:,(\d+))?/.exec(raw);
+        if (match) right = Number(match[1]) - 1;
+        continue;
+      }
+      if (raw.startsWith('\\')) continue;
+      if (raw.startsWith('+')) { right += 1; lines.add(right); }
+      else if (raw.startsWith('-')) continue;
+      else if (raw.length > 0 || right > 0) right += 1;
+    }
+    result.set(file.path, lines);
+  }
+  return result;
+}
+
 export interface GitHubClient {
   getPullRequest(ref: PullRequestRef): Promise<PullRequestSnapshot>;
   listPullRequestFiles(ref: PullRequestRef): Promise<readonly PullRequestFile[]>;
   previewReview(ref: PullRequestRef, payload: ReviewPreview): ReviewPreview;
+  publishReview(ref: PullRequestRef, payload: ReviewPreview): Promise<{ readonly reviewId: number; readonly url?: string }>;
 }
 
 export interface ReviewPreview { readonly commit_id: string; readonly event: 'COMMENT'; readonly body: string; readonly comments: readonly { readonly path: string; readonly line: number; readonly side: 'RIGHT' | 'LEFT'; readonly body: string }[]; }
@@ -35,6 +57,18 @@ export class GitHubApi implements GitHubClient {
 
   previewReview(_ref: PullRequestRef, payload: ReviewPreview): ReviewPreview { return payload; }
 
+  async publishReview(ref: PullRequestRef, payload: ReviewPreview): Promise<{ readonly reviewId: number; readonly url?: string }> {
+    if (!this.#token) throw new Error('GitHub publication requires a write token');
+    const current = await this.getPullRequest(ref);
+    if (current.headSha !== payload.commit_id) throw new Error(`PR head changed before publication: expected ${payload.commit_id}, found ${current.headSha}`);
+    const row = record(await this.#request(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/pulls/${ref.number}/reviews`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    }));
+    return { reviewId: integer(row.id), url: typeof row.html_url === 'string' ? row.html_url : undefined };
+  }
+
   async capturePullRequestSnapshot(ref: PullRequestRef): Promise<Snapshot> {
     const pr = await this.getPullRequest(ref);
     const fileList = await this.listPullRequestFiles(ref);
@@ -57,8 +91,8 @@ export class GitHubApi implements GitHubClient {
     return { id: snapshotId, mode: 'ref', root: `github://${ref.owner}/${ref.repo}/${pr.headSha}`, baseRef: pr.baseSha, headRef: pr.headSha, headSha: pr.headSha, files, changedPaths: manifest.changedPaths, omittedPaths: [], manifestSha256 };
   }
 
-  async #request(path: string): Promise<unknown> {
-    const response = await this.#fetch(`${this.#apiBase}${path}`, { headers: { accept: 'application/vnd.github+json', ...(this.#token ? { authorization: `Bearer ${this.#token}` } : {}), 'x-github-api-version': '2022-11-28', 'user-agent': 'Black-Box-Reviewer' }, signal: AbortSignal.timeout(30_000) });
+  async #request(path: string, init: RequestInit = {}): Promise<unknown> {
+    const response = await this.#fetch(`${this.#apiBase}${path}`, { ...init, headers: { accept: 'application/vnd.github+json', ...(this.#token ? { authorization: `Bearer ${this.#token}` } : {}), 'x-github-api-version': '2022-11-28', 'user-agent': 'Black-Box-Reviewer', ...(init.headers ?? {}) }, signal: init.signal ?? AbortSignal.timeout(30_000) });
     const value: unknown = await response.json();
     if (!response.ok) throw new Error(`GitHub API returned HTTP ${response.status}`);
     return value;

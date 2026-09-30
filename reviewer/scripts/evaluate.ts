@@ -15,7 +15,7 @@ const outputDir = join(process.cwd(), 'evidence');
 mkdirSync(outputDir, { recursive: true });
 const clean = await runCase('clean', []);
 const bug = await runCase('bug', [makeCandidate()]);
-const report = { generatedAt: new Date().toISOString(), cases: [clean.summary, bug.summary], limitations: ['Provider responses are controlled fixtures. This proves orchestration and accounting, not live model precision or recall.', 'No GitHub publication or cloud request was performed.'] };
+const report = { generatedAt: new Date().toISOString(), cases: [clean.summary, bug.summary], limitations: ['Provider responses are controlled fixtures. This proves orchestration and accounting, not live model precision or recall.', 'This offline evaluation does not spend or publish. Use pr-review for one bounded live PR run.'] };
 writeFileSync(join(outputDir, 'smoke-evaluation.json'), `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
 writeFileSync(join(outputDir, 'demo-review.json'), reportJson(bug.result), { mode: 0o600 });
 writeFileSync(join(outputDir, 'demo-review.md'), reportMarkdown(bug.result), { mode: 0o600 });

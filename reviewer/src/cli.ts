@@ -1,4 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { configFromEnv, parseDotEnv } from './config.js';
 import { buildContext } from './context.js';
 import { captureSnapshot } from './snapshot.js';
@@ -6,7 +7,7 @@ import { FakeProvider, OPENAI_ROUTE, ResponsesProvider, TOKENROUTER_ROUTE } from
 import { runReview } from './pipeline.js';
 import { ReviewStore } from './store.js';
 import { writeReports } from './report.js';
-import { GitHubApi, type PullRequestRef } from './github.js';
+import { changedRightLines, GitHubApi, type PullRequestRef } from './github.js';
 import { buildReviewPreview } from './publisher.js';
 import { listenStatusServer } from './status-server.js';
 import type { SnapshotMode } from './types.js';
@@ -18,6 +19,7 @@ const command = cliArgs[0] ?? 'help';
 if (command === 'doctor') doctor();
 else if (command === 'review') await review();
 else if (command === 'pr-preview') await prPreview();
+else if (command === 'pr-review') await prReview();
 else if (command === 'status') status();
 else if (command === 'backup') backup();
 else if (command === 'restore') restore();
@@ -36,7 +38,7 @@ function loadDotEnv(): void {
 
 function doctor(): void {
   const config = configFromEnv();
-  console.log(JSON.stringify({ root: config.root, dataDir: config.dataDir, profile: config.profile, maxAttempts: config.maxAttempts, cloudBudgetUsd: config.cloudBudgetUsd, cloudKeyConfigured: Boolean(config.openAiApiKey || config.tokenRouterApiKey), publication: 'disabled by default' }, null, 2));
+  console.log(JSON.stringify({ root: config.root, dataDir: config.dataDir, profile: config.profile, maxAttempts: config.maxAttempts, cloudBudgetUsd: config.cloudBudgetUsd, cloudKeyConfigured: Boolean(config.openAiApiKey || config.tokenRouterApiKey), publication: 'PR COMMENT only via pr-review' }, null, 2));
 }
 
 function status(): void {
@@ -107,7 +109,7 @@ async function review(): Promise<void> {
   const { packet } = buildContext(snapshot, config.maxPacketBytes);
   const store = new ReviewStore(config);
   const provider = providerFor(config);
-  const result = await runReview(config, snapshot, packet, store, { provider, authorizeCloud: process.env.REVIEWER_AUTHORIZE_CLOUD === 'true' });
+  const result = await runReview(config, snapshot, packet, store, { provider, authorizeCloud: config.profile !== 'static_only' });
   const reportDir = `${config.dataDir}/${result.reviewId}`;
   const reports = writeReports(result, reportDir);
   store.close();
@@ -120,17 +122,41 @@ async function prPreview(): Promise<void> {
   const number = Number(numberText);
   if (!owner || !repo || !Number.isSafeInteger(number) || number < 1) throw new Error('usage: reviewer pr-preview OWNER REPO NUMBER');
   const config = configFromEnv();
-  const api = new GitHubApi(config.githubToken);
+  const api = new GitHubApi(githubToken(config.githubToken));
   const ref: PullRequestRef = { owner, repo, number };
   const snapshot = await api.capturePullRequestSnapshot(ref);
   const { packet } = buildContext(snapshot, config.maxPacketBytes);
   const store = new ReviewStore(config);
   const provider = providerFor(config);
-  const result = await runReview(config, snapshot, packet, store, { provider, authorizeCloud: process.env.REVIEWER_AUTHORIZE_CLOUD === 'true' });
+  const result = await runReview(config, snapshot, packet, store, { provider, authorizeCloud: config.profile !== 'static_only' });
   const reports = writeReports(result, `${config.dataDir}/${result.reviewId}`);
   const preview = api.previewReview(ref, buildReviewPreview(result));
   store.close();
   console.log(JSON.stringify({ repository: `${owner}/${repo}`, pullRequest: number, reviewId: result.reviewId, outcome: result.outcome, snapshotId: snapshot.id, files: snapshot.files.length, changedPaths: snapshot.changedPaths, report: reports, publication: { mode: 'preview', review: preview } }, null, 2));
+}
+
+async function prReview(): Promise<void> {
+  const [owner, repo, numberText] = cliArgs.slice(1);
+  const number = Number(numberText);
+  if (!owner || !repo || !Number.isSafeInteger(number) || number < 1) throw new Error('usage: reviewer pr-review OWNER REPO NUMBER');
+  const config = configFromEnv();
+  if (config.profile === 'static_only') throw new Error('pr-review requires LUNA_API_KEY; set REVIEWER_LOCAL_ONLY=true only for local static review');
+  const authToken = githubToken(config.githubToken);
+  if (!authToken) throw new Error('pr-review requires GITHUB_TOKEN or an authenticated gh CLI session for PR comments');
+  const api = new GitHubApi(authToken);
+  const ref: PullRequestRef = { owner, repo, number };
+  const snapshot = await api.capturePullRequestSnapshot(ref);
+  const { packet } = buildContext(snapshot, config.maxPacketBytes);
+  const store = new ReviewStore(config);
+  const result = await runReview(config, snapshot, packet, store, { provider: providerFor(config), authorizeCloud: true });
+  const reports = writeReports(result, `${config.dataDir}/${result.reviewId}`);
+  const files = await api.listPullRequestFiles(ref);
+  const payload = buildReviewPreview(result, changedRightLines(files));
+  let publication: { readonly reviewId: number; readonly url?: string } | undefined;
+  if (result.outcome === 'completed_clean' || result.outcome === 'completed_findings') publication = await api.publishReview(ref, payload);
+  store.markPublication(result.reviewId, publication ? 'published' : 'not_published');
+  store.close();
+  console.log(JSON.stringify({ repository: `${owner}/${repo}`, pullRequest: number, reviewId: result.reviewId, outcome: result.outcome, snapshotId: snapshot.id, files: snapshot.files.length, changedPaths: snapshot.changedPaths, report: reports, publication: publication ? { mode: 'pr_review', ...publication, comments: payload.comments.length } : { mode: 'not_published', comments: payload.comments.length } }, null, 2));
 }
 
 function providerFor(config: ReturnType<typeof configFromEnv>) {
@@ -148,5 +174,10 @@ function parseMode(value: string): SnapshotMode {
 }
 
 function printHelp(): void {
-  console.log('reviewer doctor\nreviewer review [working_tree|staged|ref] [ref]\nreviewer pr-preview OWNER REPO NUMBER\nreviewer status\nreviewer serve\nreviewer backup [DIRECTORY]\nreviewer restore DATABASE\nreviewer export REVIEW_ID\n\nDefault profile is static_only. Cloud review requires explicit REVIEWER_AUTHORIZE_CLOUD=true and a positive REVIEWER_CLOUD_BUDGET_USD.');
+  console.log('reviewer doctor\nreviewer review [working_tree|staged|ref] [ref]\nreviewer pr-preview OWNER REPO NUMBER\nreviewer pr-review OWNER REPO NUMBER\nreviewer status\nreviewer serve\nreviewer backup [DIRECTORY]\nreviewer restore DATABASE\nreviewer export REVIEW_ID\n\nA LUNA_API_KEY selects the bounded Luna route automatically. Each PR review is capped at $0.10. Set REVIEWER_LOCAL_ONLY=true for static-only mode.');
+}
+
+function githubToken(configured: string | undefined): string | undefined {
+  if (configured) return configured;
+  try { return execFileSync('gh', ['auth', 'token'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || undefined; } catch { return undefined; }
 }

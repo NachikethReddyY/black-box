@@ -19,21 +19,20 @@ export function parseDotEnv(text: string): Record<string, string> {
 }
 
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): ReviewConfig {
-  const profile = (env.REVIEWER_PROFILE ?? 'static_only') as ReviewProfile;
+  const profile = (env.REVIEWER_PROFILE ?? (env.REVIEWER_LOCAL_ONLY === 'true' ? 'static_only' : env.LUNA_API_KEY?.trim() ? 'economy_cloud_luna_v1' : 'static_only')) as ReviewProfile;
   if (!profiles.has(profile)) throw new Error(`unsupported REVIEWER_PROFILE: ${profile}`);
   const root = resolve(env.REVIEWER_ROOT ?? discoverRepositoryRoot(cwd));
   const dataDir = resolve(env.REVIEWER_DATA_DIR ?? `${root}/reviewer/data`);
   const maxAttempts = integer(env.REVIEWER_MAX_ATTEMPTS, 4);
   if (maxAttempts < 1 || maxAttempts > 4) throw new Error('REVIEWER_MAX_ATTEMPTS must be between 1 and 4');
-  const cloudBudgetUsd = number(env.REVIEWER_CLOUD_BUDGET_USD, 0);
+  const cloudBudgetUsd = number(env.REVIEWER_CLOUD_BUDGET_USD, profile === 'static_only' ? 0 : 0.10);
   if (cloudBudgetUsd < 0) throw new Error('REVIEWER_CLOUD_BUDGET_USD cannot be negative');
-  if (profile !== 'static_only' && cloudBudgetUsd <= 0 && !env.REVIEWER_ALLOW_UNBUDGETED_TEST) {
-    throw new Error('cloud profile requires REVIEWER_CLOUD_BUDGET_USD > 0 or REVIEWER_ALLOW_UNBUDGETED_TEST=true');
-  }
+  if (profile !== 'static_only' && cloudBudgetUsd <= 0 && !env.REVIEWER_ALLOW_UNBUDGETED_TEST) throw new Error('cloud review requires a positive budget');
+  if (cloudBudgetUsd > 0.10 && !env.REVIEWER_ALLOW_LARGER_BUDGET) throw new Error('review budget is capped at $0.10 per PR');
   return {
     root, dataDir, profile, maxAttempts,
     maxInputTokens: integer(env.REVIEWER_MAX_INPUT_TOKENS, 32_768),
-    maxOutputTokens: integer(env.REVIEWER_MAX_OUTPUT_TOKENS, 16_384),
+    maxOutputTokens: integer(env.REVIEWER_MAX_OUTPUT_TOKENS, 4_096),
     maxPacketBytes: integer(env.REVIEWER_MAX_PACKET_BYTES, 128 * 1024),
     maxInlineFindings: integer(env.REVIEWER_MAX_INLINE_FINDINGS, 5),
     cloudBudgetUsd,
