@@ -20,7 +20,7 @@ The agent-mode CLI and read-only API/MCP contract should expose only finding sta
 
 The `BB CoPilot Bot` GitHub App needs `metadata: read`, `contents: write`, and `pull_requests: write` for automatic squash merging. GitHub calls the repository permission **Contents: Read and write**; its API representation is `"contents": "write"`. For reviews and PR-description updates alone, `contents: read` and `pull_requests: write` are sufficient.
 
-To enable merge access, open the App's **Permissions & events**, set **Repository permissions > Contents** to **Read and write**, and save. Accept the requested permission update on the existing installation for `NachikethReddyY/black-box` if GitHub asks. Keep the selected repository scope. Verify the installation reports `contents: write` and obtain a fresh installation token before relying on automatic merge. As last verified on 30 September 2026, both the App and installation still report `contents: read`; the requested update has not been applied.
+The App permission is configured and verified for the current installation: `contents: write` and `pull_requests: write`. Keep the selected repository scope and refresh the installation token after changing App permissions. Automatic merge still requires the exact-head review, complete coverage, successful CI, and clean mergeability gates.
 
 The reviewer CI workflow's `permissions: contents: read` controls its separate `GITHUB_TOKEN` and should remain read-only. Changing that workflow setting does not grant the App merge access. The App permission change does not bypass the exact-head review, complete coverage, successful CI, or clean mergeability gates.
 

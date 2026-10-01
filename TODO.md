@@ -90,11 +90,11 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [x] Simplify public BB AI summaries, remove displayed cost and technical identifiers, and add a deterministic mergeability score.
 - [ ] Set the GitHub App OAuth client secret and dashboard session secret in Cloudflare.
 
-## Reviewer App contents permission (thread current, 30 September 2026)
+## Reviewer App contents permission (verified, 1 October 2026)
 
-- [x] Verify current App and installation permissions without exposing credentials: both report `contents: read`.
+- [x] Verify current App and installation permissions without exposing credentials: both report `contents: write`.
 - [x] Document the required GitHub App setting **Contents: Read and write** (`contents: write`) and installation approval, separately from the read-only CI workflow token.
-- [ ] Save the App permission change and verify installation `contents: write`. Browser control was interrupted by user activity; the attempted API update returned HTTP 404 and made no change.
+- [x] Save the App permission change, accept the installation update, and verify installation `contents: write`.
 
 ### CI intelligence backlog
 

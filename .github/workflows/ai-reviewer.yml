@@ -32,6 +32,7 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.repository.owner.type == 'User' &&
       github.event.pull_request.user.login == github.repository_owner &&
+      github.event.pull_request.base.ref == github.event.repository.default_branch &&
       github.event.pull_request.draft == false
     runs-on: [self-hosted, linux, black-box-reviewer]
     timeout-minutes: 30
@@ -47,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          # Run only reviewer code from the trusted base revision. The PR is read through GitHub's API.
+          # Run only reviewer code from the trusted default-branch revision. The PR is read through GitHub's API.
           ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
       - uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d # v4.1.0
