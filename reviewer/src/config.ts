@@ -27,6 +27,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env, cwd = proces
   if (cloudBudgetUsd < 0) throw new Error('REVIEWER_CLOUD_BUDGET_USD cannot be negative');
   if (profile !== 'static_only' && cloudBudgetUsd <= 0 && !env.REVIEWER_ALLOW_UNBUDGETED_TEST) throw new Error('cloud review requires a positive budget');
   if (cloudBudgetUsd > 0.10 && !env.REVIEWER_ALLOW_LARGER_BUDGET) throw new Error('review budget is capped at $0.10 per PR');
+  if (profile !== 'static_only' && maxAttempts < 3) throw new Error('cloud review requires at least three attempts for two specialists and a verifier');
   const githubAppId = env.GITHUB_APP_ID?.trim() || undefined;
   const githubAppInstallationId = env.GITHUB_APP_INSTALLATION_ID?.trim() || undefined;
   const githubAppPrivateKeyFile = env.GITHUB_APP_PRIVATE_KEY_FILE?.trim() || undefined;

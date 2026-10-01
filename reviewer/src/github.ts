@@ -1,6 +1,6 @@
 export interface PullRequestRef { readonly owner: string; readonly repo: string; readonly number: number; }
 export interface PullRequestSnapshot { readonly ref: PullRequestRef; readonly baseSha: string; readonly headSha: string; readonly title: string; readonly body: string | null; readonly draft: boolean; readonly state: 'open' | 'closed'; readonly mergeableState?: string; }
-export interface PullRequestSummary { readonly ref: PullRequestRef; readonly headSha: string; readonly draft: boolean; readonly title: string; }
+export interface PullRequestSummary { readonly ref: PullRequestRef; readonly headSha: string; readonly draft: boolean; readonly title: string; readonly authorLogin?: string; }
 export interface PullRequestFile { readonly path: string; readonly status: string; readonly additions: number; readonly deletions: number; readonly patch?: string; }
 export interface CiStatus { readonly ready: boolean; readonly pending: boolean; readonly failed: boolean; readonly count: number; readonly details: readonly string[]; }
 
@@ -57,7 +57,8 @@ export class GitHubApi implements GitHubClient {
       if (!Array.isArray(value)) throw new Error('GitHub pull request response was not an array');
       for (const item of value) {
         const row = record(item); const head = record(row.head);
-        result.push({ ref: { owner: repository.owner, repo: repository.repo, number: integer(row.number) }, headSha: string(head.sha), draft: row.draft === true, title: string(row.title) });
+        const user = optionalRecord(row.user);
+        result.push({ ref: { owner: repository.owner, repo: repository.repo, number: integer(row.number) }, headSha: string(head.sha), draft: row.draft === true, title: string(row.title), ...(typeof user.login === 'string' ? { authorLogin: user.login } : {}) });
       }
       if (value.length < 100) return result;
     }
@@ -186,6 +187,7 @@ function tarString(value: Buffer): string { return value.toString('utf8').replac
 function parseOctal(value: Buffer): number { const text = tarString(value).replace(/\0/g, '').trim(); return text ? Number.parseInt(text, 8) : 0; }
 
 function record(value: unknown): Record<string, unknown> { if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('GitHub response field was not an object'); return value as Record<string, unknown>; }
+function optionalRecord(value: unknown): Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function string(value: unknown): string { if (typeof value !== 'string') throw new Error('GitHub response field was not a string'); return value; }
 function integer(value: unknown): number { if (!Number.isSafeInteger(value)) throw new Error('GitHub response field was not an integer'); return Number(value); }
 import { gunzipSync } from 'node:zlib';

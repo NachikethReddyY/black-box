@@ -55,6 +55,7 @@ export class AutomaticReviewer {
       for (const pullRequest of pullRequests) {
         if (reviewed >= limit) break;
         if (pullRequest.draft && !(this.#config.includeDrafts ?? false)) { skippedDrafts += 1; continue; }
+        if (pullRequest.authorLogin !== repository.owner) continue;
         if (!this.#store.claimAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 15 * 60_000)) {
           skippedProcessed += 1;
           if (this.#config.autoMerge) {

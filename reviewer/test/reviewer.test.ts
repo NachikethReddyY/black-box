@@ -40,6 +40,7 @@ test('automatic polling configuration is explicit and safe by default', () => {
   assert.equal(cfg.maxPacketBytes, 600 * 1024);
   assert.throws(() => configFromEnv({ REVIEWER_GITHUB_REPOSITORIES: 'owner/repo/extra' }, '/tmp'), /invalid/);
   assert.throws(() => configFromEnv({ REVIEWER_POLL_INTERVAL_SECONDS: '10' }, '/tmp'), /at least 15/);
+  assert.throws(() => configFromEnv({ LUNA_API_KEY: 'router-key', REVIEWER_MAX_ATTEMPTS: '2' }, '/tmp'), /at least three attempts/);
 });
 
 test('working-tree and staged snapshots capture different immutable bytes', () => {
@@ -129,7 +130,7 @@ test('automatic polling skips drafts, reviews one new head, and suppresses it on
   const requests: string[] = [];
   const client = {
     async getPullRequest() { return { headSha: 'ready-head', body: null, draft: false, state: 'open' as const, mergeableState: 'blocked' }; },
-    async listOpenPullRequests() { return [{ ref: { owner: 'owner', repo: 'repo', number: 1 }, headSha: 'draft-head', draft: true, title: 'Draft' }, { ref: { owner: 'owner', repo: 'repo', number: 2 }, headSha: 'ready-head', draft: false, title: 'Ready' }]; },
+    async listOpenPullRequests() { return [{ ref: { owner: 'owner', repo: 'repo', number: 1 }, headSha: 'draft-head', draft: true, title: 'Draft', authorLogin: 'owner' }, { ref: { owner: 'owner', repo: 'repo', number: 2 }, headSha: 'ready-head', draft: false, title: 'Ready', authorLogin: 'owner' }]; },
     async capturePullRequestSnapshot() { return { ...snapshot, headSha: 'ready-head', changedPaths: ['index.ts'] }; },
     async listPullRequestFiles() { return [{ path: 'index.ts', status: 'modified', additions: 1, deletions: 0, patch: '@@ -1 +1 @@\n+changed' }]; },
     async publishReview(_ref: unknown, payload: { commit_id: string }) { requests.push(payload.commit_id); return { reviewId: 99 }; },
@@ -153,7 +154,7 @@ test('automatic polling backs off an incomplete review instead of marking it com
   const snapshot = captureSnapshot(cfg, 'ref', 'HEAD');
   const client = {
     async getPullRequest() { return { headSha: snapshot.headSha ?? 'head', body: null, draft: false, state: 'open' as const, mergeableState: 'blocked' }; },
-    async listOpenPullRequests() { return [{ ref: { owner: 'owner', repo: 'repo', number: 1 }, headSha: snapshot.headSha ?? 'head', draft: false, title: 'Ready' }]; },
+    async listOpenPullRequests() { return [{ ref: { owner: 'owner', repo: 'repo', number: 1 }, headSha: snapshot.headSha ?? 'head', draft: false, title: 'Ready', authorLogin: 'owner' }]; },
     async capturePullRequestSnapshot() { return snapshot; },
     async listPullRequestFiles() { return []; },
     async publishReview() { throw new Error('must not publish incomplete results'); },
@@ -210,7 +211,7 @@ test('automatic clean reviews squash merge only after successful CI and clean me
   let mergeCalls = 0;
   const client = {
     async getPullRequest() { return { headSha: snapshot.headSha ?? 'head', body: null, draft: false, state: 'open' as const, mergeableState: 'clean' }; },
-    async listOpenPullRequests() { return [{ ref: { owner: 'owner', repo: 'repo', number: 1 }, headSha: snapshot.headSha ?? 'head', draft: false, title: 'Ready' }]; },
+    async listOpenPullRequests() { return [{ ref: { owner: 'owner', repo: 'repo', number: 1 }, headSha: snapshot.headSha ?? 'head', draft: false, title: 'Ready', authorLogin: 'owner' }]; },
     async capturePullRequestSnapshot() { return snapshot; },
     async listPullRequestFiles() { return []; },
     async publishReview() { return { reviewId: 100 }; },
@@ -231,7 +232,7 @@ test('automatic merge refuses incomplete coverage even when the model reported c
   const cfg = config(root, { githubRepositories: [{ owner: 'owner', repo: 'repo' }], autoMerge: true });
   const snapshot = captureSnapshot(cfg, 'ref', 'HEAD');
   const client = {
-    async listOpenPullRequests() { return [{ ref: { owner: 'owner', repo: 'repo', number: 1 }, headSha: snapshot.headSha ?? 'head', draft: false, title: 'Ready' }]; },
+    async listOpenPullRequests() { return [{ ref: { owner: 'owner', repo: 'repo', number: 1 }, headSha: snapshot.headSha ?? 'head', draft: false, title: 'Ready', authorLogin: 'owner' }]; },
     async getPullRequest() { return { headSha: snapshot.headSha ?? 'head', body: null, draft: false, state: 'open' as const, mergeableState: 'clean' }; },
     async capturePullRequestSnapshot() { return snapshot; },
     async listPullRequestFiles() { return []; },
@@ -415,12 +416,12 @@ test('GitHub adapter lists open PR heads and draft state for automatic polling',
   const fetcher: typeof fetch = async (input) => {
     const url = String(input);
     assert.match(url, /pulls\?state=open/);
-    return new Response(JSON.stringify([{ number: 3, title: 'Ready', draft: false, head: { sha: 'head-3' } }, { number: 4, title: 'Draft', draft: true, head: { sha: 'head-4' } }]), { status: 200 });
+    return new Response(JSON.stringify([{ number: 3, title: 'Ready', draft: false, user: { login: 'owner' }, head: { sha: 'head-3' } }, { number: 4, title: 'Draft', draft: true, user: { login: 'owner' }, head: { sha: 'head-4' } }]), { status: 200 });
   };
   const api = new GitHubApi('app-token', fetcher, 'https://github.test');
   assert.deepEqual(await api.listOpenPullRequests({ owner: 'owner', repo: 'repo' }), [
-    { ref: { owner: 'owner', repo: 'repo', number: 3 }, headSha: 'head-3', draft: false, title: 'Ready' },
-    { ref: { owner: 'owner', repo: 'repo', number: 4 }, headSha: 'head-4', draft: true, title: 'Draft' },
+    { ref: { owner: 'owner', repo: 'repo', number: 3 }, headSha: 'head-3', draft: false, title: 'Ready', authorLogin: 'owner' },
+    { ref: { owner: 'owner', repo: 'repo', number: 4 }, headSha: 'head-4', draft: true, title: 'Draft', authorLogin: 'owner' },
   ]);
 });
 
