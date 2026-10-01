@@ -1,3 +1,5 @@
+import { sha256 } from './hash.js';
+
 export interface PullRequestRef { readonly owner: string; readonly repo: string; readonly number: number; }
 export interface PullRequestSnapshot { readonly ref: PullRequestRef; readonly baseSha: string; readonly headSha: string; readonly title: string; readonly body: string | null; readonly draft: boolean; readonly state: 'open' | 'closed'; readonly mergeableState?: string; }
 export interface PullRequestSummary { readonly ref: PullRequestRef; readonly headSha: string; readonly draft: boolean; readonly title: string; readonly authorLogin?: string; }
@@ -31,7 +33,7 @@ export interface GitHubClient {
   previewReview(ref: PullRequestRef, payload: ReviewPreview): ReviewPreview;
   publishReview(ref: PullRequestRef, payload: ReviewPreview): Promise<{ readonly reviewId: number; readonly url?: string }>;
   listOpenPullRequests(repository: { readonly owner: string; readonly repo: string }): Promise<readonly PullRequestSummary[]>;
-  updatePullRequestBody(ref: PullRequestRef, body: string, expectedHeadSha: string): Promise<void>;
+  updatePullRequestBody(ref: PullRequestRef, body: string, expectedHeadSha: string, expectedBodyHash?: string): Promise<void>;
   getCiStatus(ref: PullRequestRef, headSha: string): Promise<CiStatus>;
   mergePullRequest(ref: PullRequestRef, headSha: string): Promise<{ readonly sha?: string; readonly url?: string }>;
 }
@@ -90,11 +92,12 @@ export class GitHubApi implements GitHubClient {
     return { reviewId: integer(row.id), url: typeof row.html_url === 'string' ? row.html_url : undefined };
   }
 
-  async updatePullRequestBody(ref: PullRequestRef, body: string, expectedHeadSha: string): Promise<void> {
+  async updatePullRequestBody(ref: PullRequestRef, body: string, expectedHeadSha: string, expectedBodyHash?: string): Promise<void> {
     if (!this.#token) throw new Error('GitHub PR updates require a write token');
     const current = await this.getPullRequest(ref);
     if (current.state !== 'open') throw new Error('cannot update a closed pull request');
     if (current.headSha !== expectedHeadSha) throw new Error(`PR head changed before description update: expected ${expectedHeadSha}, found ${current.headSha}`);
+    if (expectedBodyHash !== undefined && sha256(current.body ?? '') !== expectedBodyHash) throw new Error('PR description changed before summary update');
     await this.#request(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/pulls/${ref.number}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ body }) });
   }
 
@@ -191,5 +194,5 @@ function optionalRecord(value: unknown): Record<string, unknown> { return typeof
 function string(value: unknown): string { if (typeof value !== 'string') throw new Error('GitHub response field was not a string'); return value; }
 function integer(value: unknown): number { if (!Number.isSafeInteger(value)) throw new Error('GitHub response field was not an integer'); return Number(value); }
 import { gunzipSync } from 'node:zlib';
-import { id, sha256, stableJson } from './hash.js';
+import { id, stableJson } from './hash.js';
 import type { Snapshot, SnapshotId, SourceFile } from './types.js';

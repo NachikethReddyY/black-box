@@ -1,5 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { configFromEnv, parseDotEnv } from './config.js';
+import { sha256 } from './hash.js';
 import { buildContext } from './context.js';
 import { captureSnapshot } from './snapshot.js';
 import { createResponsesProvider, FakeProvider } from './provider.js';
@@ -201,7 +202,7 @@ async function prReview(): Promise<void> {
   if (config.updatePullRequestDescription && (result.outcome === 'completed_clean' || result.outcome === 'completed_findings')) {
     const current = await api.getPullRequest(ref);
     if (current.headSha !== snapshot.headSha) throw new Error(`PR head changed before description update: expected ${snapshot.headSha}, found ${current.headSha}`);
-    await api.updatePullRequestBody(ref, mergeSummaryBody(current.body, result), snapshot.headSha);
+    await api.updatePullRequestBody(ref, mergeSummaryBody(current.body, result), snapshot.headSha, sha256(current.body ?? ''));
     summaryUpdated = true;
   }
   store.markPublication(result.reviewId, publication ? 'published' : 'not_published');
