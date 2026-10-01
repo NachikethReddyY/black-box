@@ -87,6 +87,7 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [x] Configure the repository's encrypted TokenRouter and BB CoPilot Bot App secrets without committing values.
 - [x] Run one live PR review that published as `bb-copilot-bot[bot]`, anchored two changed-line comments, and updated the marker-owned PR summary.
 - [x] Close the live-review findings by keeping the App key in memory and limiting automatic cloud review to owner-authored PRs.
+- [x] Simplify public BB AI summaries, remove displayed cost and technical identifiers, and add a deterministic mergeability score.
 - [ ] Set the GitHub App OAuth client secret and dashboard session secret in Cloudflare.
 
 ## Reviewer App contents permission (thread current, 30 September 2026)

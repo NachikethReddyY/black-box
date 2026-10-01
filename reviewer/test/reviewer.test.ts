@@ -12,10 +12,10 @@ import { runReview } from '../src/pipeline.js';
 import { reportMarkdown } from '../src/report.js';
 import { captureSnapshot } from '../src/snapshot.js';
 import { ReviewStore } from '../src/store.js';
-import type { Candidate, ProviderResponse, ReviewConfig, ReviewId } from '../src/types.js';
+import type { Candidate, FindingId, ProviderResponse, ReviewConfig, ReviewId } from '../src/types.js';
 import { tempRepo, run } from './helpers.js';
 import { changedRightLines, GitHubApi } from '../src/github.js';
-import { buildReviewPreview } from '../src/publisher.js';
+import { assessMergeability, buildReviewPreview } from '../src/publisher.js';
 import { mergeSummaryBody, SUMMARY_END, SUMMARY_START, summaryCoversHead } from '../src/publisher.js';
 import { listenStatusServer } from '../src/status-server.js';
 import { createGitHubAppJwt, createGitHubInstallationToken, githubAppCredentials } from '../src/github-app.js';
@@ -152,10 +152,25 @@ test('PR summaries replace only the BlackBox marker block', () => {
   const updated = mergeSummaryBody(original, result);
   assert.match(updated, /Keep this human text/);
   assert.match(updated, /After text/);
-  assert.match(updated, /No supported findings/);
+  assert.match(updated, /No supported issues found/);
+  assert.match(updated, /Mergeability: 100\/100 — Ready for merge review/);
+  assert.match(updated, /Written by: BB AI/);
+  assert.doesNotMatch(updated, /Estimated cost|Revision:|Changed files:|Reviewed by:/);
   assert.equal((updated.match(new RegExp(SUMMARY_START, 'g')) ?? []).length, 1);
   assert.equal(summaryCoversHead(updated, 'head'), true);
   assert.throws(() => mergeSummaryBody(`${SUMMARY_START}\nonly`, result), /marker pair/);
+});
+
+test('mergeability is deterministic and blocks incomplete reviews', () => {
+  const root = tempRepo();
+  const cfg = config(root);
+  const snapshot = captureSnapshot(cfg, 'ref', 'HEAD');
+  const clean = { reviewId: id('review', 'mergeability-clean') as ReviewId, snapshot: { ...snapshot, headSha: 'head' }, profile: 'static_only' as const, outcome: 'completed_clean' as const, candidates: [], verifications: [], findings: [], secretFindings: [], coverage: { selectedPaths: ['index.ts'], omittedPaths: [], complete: true }, attempts: 0, estimatedCostUsd: 0 };
+  assert.deepEqual(assessMergeability(clean), { score: 100, label: 'Ready for merge review', reasons: ['No supported issues were found.'] });
+  const finding = { ...clean, outcome: 'completed_findings' as const, findings: [{ findingId: id('finding', 'one') as FindingId, occurrenceId: 'occurrence-1', evidenceVersion: 'evidence-1', candidate: makeCandidate(), verification: { candidateId: 'candidate-1', decision: 'supported' as const, evidenceChecked: ['index.ts'], causalLink: 'introduced' as const, verificationKind: 'model_assessment' as const, reason: 'supported by changed code', uncertainty: 'none' } }] };
+  assert.deepEqual(assessMergeability(finding), { score: 75, label: 'Needs changes', reasons: ['1 inline issue need attention.'] });
+  const incomplete = { ...clean, outcome: 'incomplete' as const, coverage: { selectedPaths: [], omittedPaths: ['index.ts'], complete: false } };
+  assert.deepEqual(assessMergeability(incomplete), { score: 0, label: 'Blocked', reasons: ['The review did not finish.'] });
 });
 
 test('automatic clean reviews squash merge only after successful CI and clean mergeability', async () => {
@@ -407,6 +422,9 @@ test('publisher preview keeps exact reviewed head and changed-line anchors', () 
   const preview = buildReviewPreview(result);
   assert.equal(preview.commit_id, 'head-sha');
   assert.equal(preview.event, 'COMMENT');
+  assert.match(preview.body, /Mergeability: 75\/100 — Needs changes/);
+  assert.match(preview.body, /Written by: BB AI/);
+  assert.doesNotMatch(preview.body, /Estimated cost|Revision:|Changed files:|Reviewed by:/);
   assert.equal(preview.comments[0]?.path, 'index.ts');
   assert.equal(preview.comments[0]?.line, 1);
 });
