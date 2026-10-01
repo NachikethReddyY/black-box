@@ -10,7 +10,7 @@ export interface RunOptions {
 
 export async function runReview(config: ReviewConfig, snapshot: Snapshot, packet: ContextPacket, store: ReviewStore, options: RunOptions = {}): Promise<ReviewResult> {
   const reviewId = (options.reviewId ?? id('review', `${snapshot.id}:${config.profile}`)) as ReviewId;
-  const base = { reviewId, snapshot, profile: config.profile, candidates: [], verifications: [], findings: [], secretFindings: packet.secretFindings, coverage: { selectedPaths: packet.files.map((file) => file.path), omittedPaths: packet.omittedPaths, complete: packet.omittedPaths.length === 0 }, attempts: 0, estimatedCostUsd: 0 };
+  const base = { reviewId, snapshot, profile: config.profile, candidates: [], verifications: [], findings: [], secretFindings: packet.secretFindings, deterministicSecurityCheck: { secretScanCompleted: true, findings: packet.secretFindings.length }, coverage: { selectedPaths: packet.files.map((file) => file.path), omittedPaths: packet.omittedPaths, complete: packet.omittedPaths.length === 0 }, attempts: 0, estimatedCostUsd: 0 };
   if (config.profile === 'static_only') {
     const result = { ...base, outcome: packet.secretFindings.length > 0 ? 'completed_findings' as const : 'completed_clean' as const };
     store.saveResult(result);
@@ -47,12 +47,10 @@ export async function runReview(config: ReviewConfig, snapshot: Snapshot, packet
       for (const candidate of response.candidates ?? []) candidates.push(normalizeCandidateEvidence(candidate, snapshot, packet));
     }
     candidates = dedupe(candidates);
-    if (candidates.length > 0) {
-      const response = await attempt(provider, store, reviewId, 'verifier', { role: 'verifier', snapshotId: snapshot.id, packet, candidates, requestId: `${reviewId}:verifier:0`, maxOutputTokens: config.maxOutputTokens }, maxCostCents / config.maxAttempts);
-      attempts += 1;
-      estimatedCostUsd += cost(response.inputTokens, response.outputTokens, provider);
-      verifications = validateVerificationSet(candidates, response.verifications ?? []);
-    }
+    const response = await attempt(provider, store, reviewId, 'verifier', { role: 'verifier', snapshotId: snapshot.id, packet, candidates, requestId: `${reviewId}:verifier:0`, maxOutputTokens: config.maxOutputTokens }, maxCostCents / config.maxAttempts);
+    attempts += 1;
+    estimatedCostUsd += cost(response.inputTokens, response.outputTokens, provider);
+    verifications = validateVerificationSet(candidates, response.verifications ?? []);
     const findings = makeFindings(candidates, verifications, snapshot);
     const result: ReviewResult = { ...base, outcome: findings.length > 0 ? 'completed_findings' : 'completed_clean', candidates, verifications, findings, attempts, estimatedCostUsd };
     store.saveResult(result);

@@ -49,6 +49,7 @@ export class AutomaticReviewer {
     let discovered = 0; let skippedDrafts = 0; let skippedProcessed = 0; let reviewed = 0; let published = 0; let summaries = 0; let merged = 0; let waitingForCi = 0; let failed = 0;
     const limit = this.#config.maxAutomaticReviewsPerPoll ?? 1;
     for (const repository of repositories) {
+      if (reviewed >= limit) break;
       const pullRequests = await this.#client.listOpenPullRequests(repository);
       discovered += pullRequests.length;
       for (const pullRequest of pullRequests) {
@@ -141,6 +142,9 @@ export class AutomaticReviewer {
 function mergeEligible(result: ReviewResult): boolean {
   return result.outcome === 'completed_clean'
     && result.coverage.complete
+    && result.deterministicSecurityCheck?.secretScanCompleted === true
+    && result.deterministicSecurityCheck.findings === 0
+    && (result.profile === 'static_only' || result.attempts >= 3)
     && result.verifications.every((verification) => verification.decision === 'supported' || verification.decision === 'rejected');
 }
 

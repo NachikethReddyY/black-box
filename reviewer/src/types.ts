@@ -114,6 +114,10 @@ export interface ReviewResult {
   readonly verifications: readonly Verification[];
   readonly findings: readonly FindingOccurrence[];
   readonly secretFindings: readonly SecretFinding[];
+  readonly deterministicSecurityCheck?: {
+    readonly secretScanCompleted: boolean;
+    readonly findings: number;
+  };
   readonly coverage: {
     readonly selectedPaths: readonly string[];
     readonly omittedPaths: readonly string[];
