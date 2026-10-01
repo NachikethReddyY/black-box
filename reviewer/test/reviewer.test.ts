@@ -493,20 +493,22 @@ test('GitHub publisher posts one COMMENT review with only changed-line anchors',
   assert.match(requests.at(-1)?.body ?? '', /"event":"COMMENT"/);
 });
 
-test('GitHub PR summary updates use an ETag conditional request', async () => {
+test('GitHub PR summary updates verify the head and body after writing', async () => {
   const requests: { url: string; method: string; headers?: HeadersInit }[] = [];
+  let body = 'old';
   const fetcher: typeof fetch = async (input, init) => {
     const url = String(input);
     requests.push({ url, method: init?.method ?? 'GET', headers: init?.headers });
-    if (url.endsWith('/pulls/7') && init?.method === 'PATCH') return new Response('{}', { status: 200 });
-    if (url.endsWith('/pulls/7')) return new Response(JSON.stringify({ base: { sha: 'base' }, head: { sha: 'head' }, title: 'Fixture', body: 'old', draft: false, state: 'open' }), { status: 200, headers: { etag: '"pr-v1"' } });
+    if (url.endsWith('/pulls/7') && init?.method === 'PATCH') { body = JSON.parse(String(init.body)).body as string; return new Response('{}', { status: 200 }); }
+    if (url.endsWith('/pulls/7')) return new Response(JSON.stringify({ base: { sha: 'base' }, head: { sha: 'head' }, title: 'Fixture', body, draft: false, state: 'open' }), { status: 200 });
     throw new Error(`unexpected request ${url}`);
   };
   const api = new GitHubApi('write-token', fetcher, 'https://github.test');
   await api.updatePullRequestBody({ owner: 'owner', repo: 'repo', number: 7 }, 'new', 'head', sha256('old'));
   const patch = requests.find((request) => request.method === 'PATCH');
   assert.ok(patch);
-  assert.equal(new Headers(patch.headers).get('if-match'), '"pr-v1"');
+  assert.equal(new Headers(patch.headers).get('if-match'), null);
+  assert.equal(requests.filter((request) => request.method === 'GET').length, 2);
 });
 
 test('GitHub diff parser identifies added right-side lines', () => {
@@ -530,6 +532,20 @@ test('publisher preview keeps exact reviewed head and changed-line anchors', () 
   assert.equal(preview.comments[0]?.path, 'index.ts');
   assert.equal(preview.comments[0]?.line, 1);
   assert.equal(buildReviewPreview(result, undefined, 0).comments.length, 0);
+});
+
+test('publisher escapes model-controlled review text before posting Markdown', () => {
+  const root = tempRepo();
+  const cfg = config(root);
+  const snapshot = captureSnapshot(cfg, 'ref', 'HEAD');
+  const candidate = { ...makeCandidate(), title: '[click](https://evil.example) @everyone', impact: '`spoof` **impact**', actual: '<script>alert(1)</script>', expected: 'safe value' };
+  const verification = { candidateId: candidate.candidateId, decision: 'supported' as const, evidenceChecked: ['index.ts'], causalLink: 'introduced' as const, verificationKind: 'model_assessment' as const, reason: 'see https://evil.example @maintainer', uncertainty: '' };
+  const result = { reviewId: id('review', 'escaping') as ReviewId, snapshot: { ...snapshot, changedPaths: ['index.ts'], headSha: 'head-sha' }, profile: 'static_only' as const, outcome: 'completed_findings' as const, candidates: [candidate], verifications: [verification], findings: [{ findingId: id('finding', 'escaping') as never, occurrenceId: 'occurrence', evidenceVersion: 'version', candidate, verification }], secretFindings: [], coverage: { selectedPaths: ['index.ts'], omittedPaths: [], complete: true }, attempts: 3, estimatedCostUsd: 0 };
+  const comment = buildReviewPreview(result).comments[0]?.body ?? '';
+  assert.match(comment, /\\\[click\\\]/);
+  assert.match(comment, /\\@everyone/);
+  assert.doesNotMatch(comment, /\(https:\/\/evil\.example\)/);
+  assert.doesNotMatch(comment, /<script>/);
 });
 
 test('Responses adapter sends the configured medium reasoning route without tools or hidden retries', async () => {

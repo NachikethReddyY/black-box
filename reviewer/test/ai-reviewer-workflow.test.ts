@@ -16,7 +16,6 @@ test('AI reviewer workflow is event-scoped, trusted, and fork-isolated', () => {
   assert.match(workflow, /runs-on: \[self-hosted, linux, black-box-reviewer\]/);
   assert.match(workflow, /ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
   assert.match(workflow, /GITHUB_APP_PRIVATE_KEY: \$\{\{ secrets\.BB_GITHUB_APP_PRIVATE_KEY \}\}/);
-  assert.match(workflow, /APP_PRIVATE_KEY: \$\{\{ secrets\.BB_GITHUB_APP_PRIVATE_KEY \}\}/);
   assert.match(workflow, /REVIEWER_REPOSITORY: \$\{\{ github\.event\.repository\.full_name \}\}/);
   assert.match(workflow, /REVIEWER_GITHUB_REPOSITORIES: \$\{\{ github\.event\.repository\.full_name \}\}/);
   assert.match(workflow, /REVIEWER_PR_NUMBER: \$\{\{ github\.event\.pull_request\.number \}\}/);

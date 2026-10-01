@@ -100,9 +100,9 @@ export class GitHubApi implements GitHubClient {
     if (current.state !== 'open') throw new Error('cannot update a closed pull request');
     if (current.headSha !== expectedHeadSha) throw new Error(`PR head changed before description update: expected ${expectedHeadSha}, found ${current.headSha}`);
     if (expectedBodyHash !== undefined && sha256(current.body ?? '') !== expectedBodyHash) throw new Error('PR description changed before summary update');
-    const etag = currentResponse.headers.get('etag');
-    if (expectedBodyHash !== undefined && !etag) throw new Error('GitHub PR description response did not include an ETag for a conditional update');
-    await this.#request(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/pulls/${ref.number}`, { method: 'PATCH', headers: { 'content-type': 'application/json', ...(etag ? { 'if-match': etag } : {}) }, body: JSON.stringify({ body }) });
+    await this.#request(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/pulls/${ref.number}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ body }) });
+    const updated = await this.getPullRequest(ref);
+    if (updated.headSha !== expectedHeadSha || updated.body !== body) throw new Error('PR description changed during summary update');
   }
 
   async getCiStatus(ref: PullRequestRef, headSha: string): Promise<CiStatus> {

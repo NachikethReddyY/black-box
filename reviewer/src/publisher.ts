@@ -74,10 +74,18 @@ function summaryBody(result: ReviewResult): string {
 function commentBody(finding: ReviewResult['findings'][number]): string {
   const candidate = finding.candidate;
   const additionalLocations = [...new Set(candidate.evidence.map((evidence) => `${evidence.path}:${evidence.start}`).filter((location) => !location.startsWith(`${candidate.causalChangeRef[0]?.path ?? ''}:${candidate.causalChangeRef[0]?.start ?? -1}`)))];
-  return [`**${capitalize(candidate.severity)} severity · ${candidate.category}**`, '', `**Finding:** ${candidate.title}`, '', `**Impact:** ${candidate.impact}`, '', `**Why this matters:** ${candidate.actual}. Expected: ${candidate.expected}.`, '', `**Additional locations:** ${additionalLocations.join(', ') || 'None identified.'}`, '', `**Verification:** ${finding.verification.reason}`, '', `<!-- BlackBox finding: ${finding.findingId} -->`].join('\n');
+  return [`**${capitalize(candidate.severity)} severity · ${candidate.category}**`, '', `**Finding:** ${safeText(candidate.title)}`, '', `**Impact:** ${safeText(candidate.impact)}`, '', `**Why this matters:** ${safeText(candidate.actual)}. Expected: ${safeText(candidate.expected)}.`, '', `**Additional locations:** ${additionalLocations.map(safeText).join(', ') || 'None identified.'}`, '', `**Verification:** ${safeText(finding.verification.reason)}`, '', `<!-- BlackBox finding: ${finding.findingId} -->`].join('\n');
 }
 
 function capitalize(value: string): string { return value.charAt(0).toUpperCase() + value.slice(1); }
+
+function safeText(value: string): string {
+  return value
+    .replace(/\r?\n/g, ' ')
+    .replace(/https?:\/\//gi, (prefix) => `${prefix.slice(0, -3)}:\u200b//`)
+    .replace(/@/g, '\\@')
+    .replace(/[\\`*_{}\[\]()#+\-.!|>~]/g, '\\$&');
+}
 
 export function mergeSummaryBody(existing: string | null, result: ReviewResult): string {
   const body = existing ?? '';
