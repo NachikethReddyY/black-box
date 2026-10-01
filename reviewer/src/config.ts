@@ -30,8 +30,9 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env, cwd = proces
   const githubAppId = env.GITHUB_APP_ID?.trim() || undefined;
   const githubAppInstallationId = env.GITHUB_APP_INSTALLATION_ID?.trim() || undefined;
   const githubAppPrivateKeyFile = env.GITHUB_APP_PRIVATE_KEY_FILE?.trim() || undefined;
-  const appCredentialCount = [githubAppId, githubAppInstallationId, githubAppPrivateKeyFile].filter(Boolean).length;
-  if (appCredentialCount !== 0 && appCredentialCount !== 3) throw new Error('GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and GITHUB_APP_PRIVATE_KEY_FILE must be configured together');
+  const githubAppPrivateKey = env.GITHUB_APP_PRIVATE_KEY?.trim() || undefined;
+  const appCredentialCount = [githubAppId, githubAppInstallationId, githubAppPrivateKeyFile ?? githubAppPrivateKey].filter(Boolean).length;
+  if (appCredentialCount !== 0 && appCredentialCount !== 3) throw new Error('GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and one private-key source must be configured together');
   const githubRepositories = parseRepositories(env.REVIEWER_GITHUB_REPOSITORIES);
   const pollIntervalMs = integer(env.REVIEWER_POLL_INTERVAL_SECONDS, 60) * 1000;
   if (pollIntervalMs < 15_000) throw new Error('REVIEWER_POLL_INTERVAL_SECONDS must be at least 15');
@@ -51,6 +52,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env, cwd = proces
     githubAppId,
     githubAppInstallationId,
     githubAppPrivateKeyFile,
+    githubAppPrivateKey,
     githubToken: env.GITHUB_TOKEN?.trim() || undefined,
     githubRepositories,
     pollIntervalMs,

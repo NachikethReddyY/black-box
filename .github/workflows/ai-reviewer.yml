@@ -22,7 +22,8 @@ jobs:
     if: >-
       github.event.repository.full_name == github.repository &&
       github.event.pull_request.base.repo.full_name == github.repository &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == github.repository_owner
     runs-on: [self-hosted, linux, black-box-reviewer]
     timeout-minutes: 30
     env:
@@ -36,7 +37,7 @@ jobs:
       TOKENROUTER_API_KEY: ${{ secrets.TOKENROUTER_API_KEY }}
       GITHUB_APP_ID: ${{ secrets.BB_GITHUB_APP_ID }}
       GITHUB_APP_INSTALLATION_ID: ${{ secrets.BB_GITHUB_APP_INSTALLATION_ID }}
-      GITHUB_APP_PRIVATE_KEY_FILE: ${{ runner.temp }}/black-box-reviewer-app.pem
+      GITHUB_APP_PRIVATE_KEY: ${{ secrets.BB_GITHUB_APP_PRIVATE_KEY }}
       REVIEWER_REPOSITORY: ${{ github.event.repository.full_name }}
       REVIEWER_PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
@@ -55,17 +56,8 @@ jobs:
           cache-dependency-path: reviewer/pnpm-lock.yaml
       - name: Install reviewer dependencies
         run: pnpm --dir reviewer install --frozen-lockfile --ignore-scripts
-      - name: Materialize GitHub App key
-        env:
-          APP_PRIVATE_KEY: ${{ secrets.BB_GITHUB_APP_PRIVATE_KEY }}
-        run: |
-          umask 077
-          printf '%s' "$APP_PRIVATE_KEY" > "$GITHUB_APP_PRIVATE_KEY_FILE"
       - name: Review pull request
         run: |
           repository_owner="${REVIEWER_REPOSITORY%%/*}"
           repository_name="${REVIEWER_REPOSITORY#*/}"
           pnpm --dir reviewer run pr-review -- "$repository_owner" "$repository_name" "$REVIEWER_PR_NUMBER"
-      - name: Remove GitHub App key
-        if: ${{ always() }}
-        run: rm -f -- "$GITHUB_APP_PRIVATE_KEY_FILE"

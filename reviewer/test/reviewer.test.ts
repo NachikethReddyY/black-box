@@ -262,6 +262,8 @@ test('GitHub App publication credentials are all-or-nothing and do not use a per
   const configured = configFromEnv({ GITHUB_APP_ID: '123', GITHUB_APP_INSTALLATION_ID: '456', GITHUB_APP_PRIVATE_KEY_FILE: '/tmp/app.pem', GITHUB_TOKEN: 'personal' }, '/tmp');
   assert.deepEqual(githubAppCredentials(configured), { appId: '123', installationId: '456', privateKeyFile: '/tmp/app.pem' });
   assert.equal(configured.githubToken, 'personal');
+  const inMemory = configFromEnv({ GITHUB_APP_ID: '123', GITHUB_APP_INSTALLATION_ID: '456', GITHUB_APP_PRIVATE_KEY: 'pem' }, '/tmp');
+  assert.deepEqual(githubAppCredentials(inMemory), { appId: '123', installationId: '456', privateKeyPem: 'pem' });
 });
 
 test('GitHub App signs a short-lived JWT and exchanges it for an installation token', async () => {

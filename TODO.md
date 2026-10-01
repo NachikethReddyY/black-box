@@ -75,7 +75,7 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [x] Configure the existing App ID and target-repository installation ID in the local reviewer environment before the first bot-authenticated PR review.
 - [ ] Run one bounded bot-authenticated review only on an owned repository after the App installation is confirmed.
 
-## Automatic PR reviewer (thread current, 30 September 2026)
+## Automatic PR reviewer (thread current, 1 October 2026)
 
 - [x] Add App-installation repository and open-PR polling with a durable per-head claim.
 - [x] Reuse the exact snapshot, pipeline, changed-line publisher, and App identity for each new PR head.
@@ -83,6 +83,10 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [x] Add WSL2 watcher startup instructions and verify the local watcher remains within the per-review budget.
 - [x] Add marker-owned PR summaries and fail-closed CI-gated squash merge policy.
 - [x] Exercise a real non-draft PR with passing checks; keep automatic merge blocked when the exact head has findings or partial coverage.
+- [x] Add a same-repository GitHub Actions trigger for owner-authored PR events on the Ubuntu `black-box-reviewer` runner.
+- [x] Configure the repository's encrypted TokenRouter and BB CoPilot Bot App secrets without committing values.
+- [x] Run one live PR review that published as `bb-copilot-bot[bot]`, anchored two changed-line comments, and updated the marker-owned PR summary.
+- [x] Close the live-review findings by keeping the App key in memory and limiting automatic cloud review to owner-authored PRs.
 - [ ] Set the GitHub App OAuth client secret and dashboard session secret in Cloudflare.
 
 ## Reviewer App contents permission (thread current, 30 September 2026)

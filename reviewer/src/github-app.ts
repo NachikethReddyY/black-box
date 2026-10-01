@@ -5,7 +5,8 @@ import type { ReviewConfig } from './types.js';
 export interface GitHubAppCredentials {
   readonly appId: string;
   readonly installationId: string;
-  readonly privateKeyFile: string;
+  readonly privateKeyFile?: string;
+  readonly privateKeyPem?: string;
 }
 
 export interface GitHubAppTokenResponse {
@@ -14,11 +15,11 @@ export interface GitHubAppTokenResponse {
 }
 
 /** Return complete App credentials, or undefined when publication is not configured. */
-export function githubAppCredentials(config: Pick<ReviewConfig, 'githubAppId' | 'githubAppInstallationId' | 'githubAppPrivateKeyFile'>): GitHubAppCredentials | undefined {
-  const values = [config.githubAppId, config.githubAppInstallationId, config.githubAppPrivateKeyFile];
+export function githubAppCredentials(config: Pick<ReviewConfig, 'githubAppId' | 'githubAppInstallationId' | 'githubAppPrivateKeyFile'> & Partial<Pick<ReviewConfig, 'githubAppPrivateKey'>>): GitHubAppCredentials | undefined {
+  const values = [config.githubAppId, config.githubAppInstallationId, config.githubAppPrivateKeyFile ?? config.githubAppPrivateKey];
   if (values.every((value) => value === undefined)) return undefined;
-  if (values.some((value) => !value)) throw new Error('GitHub App publication requires GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and GITHUB_APP_PRIVATE_KEY_FILE');
-  return { appId: config.githubAppId as string, installationId: config.githubAppInstallationId as string, privateKeyFile: config.githubAppPrivateKeyFile as string };
+  if (values.some((value) => !value)) throw new Error('GitHub App publication requires GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and a private key source');
+  return { appId: config.githubAppId as string, installationId: config.githubAppInstallationId as string, ...(config.githubAppPrivateKeyFile ? { privateKeyFile: config.githubAppPrivateKeyFile } : { privateKeyPem: config.githubAppPrivateKey as string }) };
 }
 
 export function createGitHubAppJwt(credentials: GitHubAppCredentials, privateKeyPem: string, nowSeconds = Math.floor(Date.now() / 1000)): string {
@@ -39,9 +40,7 @@ export async function createGitHubInstallationToken(
   nowSeconds?: number,
   apiBaseUrl = 'https://api.github.com',
 ): Promise<GitHubAppTokenResponse> {
-  const mode = statSync(credentials.privateKeyFile).mode & 0o777;
-  if ((mode & 0o077) !== 0) throw new Error(`GitHub App private key must not be group/world accessible: ${credentials.privateKeyFile}`);
-  const privateKey = readFileSync(credentials.privateKeyFile, 'utf8');
+  const privateKey = credentials.privateKeyPem ?? readProtectedPrivateKey(credentials.privateKeyFile as string);
   const jwt = createGitHubAppJwt(credentials, privateKey, nowSeconds);
   const response = await fetcher(`${apiBaseUrl.replace(/\/$/, '')}/app/installations/${encodeURIComponent(credentials.installationId)}/access_tokens`, {
     method: 'POST',
@@ -60,6 +59,12 @@ export async function createGitHubInstallationToken(
   if (typeof value !== 'object' || value === null || Array.isArray(value) || typeof (value as { token?: unknown }).token !== 'string') throw new Error('GitHub App installation token response did not contain a token');
   const row = value as { token: string; expires_at?: unknown };
   return { token: row.token, expiresAt: typeof row.expires_at === 'string' ? row.expires_at : undefined };
+}
+
+function readProtectedPrivateKey(path: string): string {
+  const mode = statSync(path).mode & 0o777;
+  if ((mode & 0o077) !== 0) throw new Error(`GitHub App private key must not be group/world accessible: ${path}`);
+  return readFileSync(path, 'utf8');
 }
 
 export async function createConfiguredGitHubInstallationToken(config: ReviewConfig, fetcher: typeof fetch = fetch): Promise<GitHubAppTokenResponse> {

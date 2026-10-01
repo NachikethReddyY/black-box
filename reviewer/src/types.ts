@@ -177,6 +177,7 @@ export interface ReviewConfig {
   readonly githubAppId?: string;
   readonly githubAppInstallationId?: string;
   readonly githubAppPrivateKeyFile?: string;
+  readonly githubAppPrivateKey?: string;
   /** Optional read-only token for previewing private PRs. It cannot publish reviews. */
   readonly githubToken?: string;
   readonly githubRepositories?: readonly RepositoryRef[];
