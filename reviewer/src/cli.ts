@@ -1,6 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { configFromEnv, parseDotEnv } from './config.js';
-import { sha256 } from './hash.js';
 import { buildContext } from './context.js';
 import { captureSnapshot } from './snapshot.js';
 import { createResponsesProvider, FakeProvider } from './provider.js';
@@ -8,7 +7,7 @@ import { runReview } from './pipeline.js';
 import { ReviewStore } from './store.js';
 import { writeReports } from './report.js';
 import { changedRightLines, GitHubApi, type PullRequestRef } from './github.js';
-import { buildReviewPreview, mergeSummaryBody } from './publisher.js';
+import { buildReviewPreview } from './publisher.js';
 import { listenStatusServer } from './status-server.js';
 import { createConfiguredGitHubInstallationToken, githubAppCredentials } from './github-app.js';
 import { AutomaticReviewer } from './automation.js';
@@ -197,14 +196,8 @@ async function prReview(): Promise<void> {
   const files = await api.listPullRequestFiles(ref);
   const payload = buildReviewPreview(result, changedRightLines(files), config.maxInlineFindings);
   let publication: { readonly reviewId: number; readonly url?: string } | undefined;
-  if (result.outcome === 'completed_clean' || result.outcome === 'completed_findings') publication = await api.publishReview(ref, payload);
-  let summaryUpdated = false;
-  if (config.updatePullRequestDescription && (result.outcome === 'completed_clean' || result.outcome === 'completed_findings')) {
-    const current = await api.getPullRequest(ref);
-    if (current.headSha !== snapshot.headSha) throw new Error(`PR head changed before description update: expected ${snapshot.headSha}, found ${current.headSha}`);
-    await api.updatePullRequestBody(ref, mergeSummaryBody(current.body, result), snapshot.headSha, sha256(current.body ?? ''));
-    summaryUpdated = true;
-  }
+  if ((result.outcome === 'completed_clean' || result.outcome === 'completed_findings') && result.secretFindings.length === 0) publication = await api.publishReview(ref, payload);
+  const summaryUpdated = false;
   store.markPublication(result.reviewId, publication ? 'published' : 'not_published');
   store.close();
   console.log(JSON.stringify({ repository: `${owner}/${repo}`, pullRequest: number, reviewId: result.reviewId, outcome: result.outcome, snapshotId: snapshot.id, files: snapshot.files.length, changedPaths: snapshot.changedPaths, report: reports, publication: publication ? { mode: 'pr_review', ...publication, comments: payload.comments.length, summaryUpdated } : { mode: 'not_published', comments: payload.comments.length, summaryUpdated: false } }, null, 2));

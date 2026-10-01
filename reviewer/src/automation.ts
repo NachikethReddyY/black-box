@@ -1,9 +1,8 @@
 import { buildContext } from './context.js';
-import { sha256 } from './hash.js';
 import { changedRightLines, type PullRequestFile, type PullRequestRef, type PullRequestSummary, type ReviewPreview } from './github.js';
 import { createResponsesProvider } from './provider.js';
 import { runReview } from './pipeline.js';
-import { buildReviewPreview, mergeSummaryBody, summaryCoversHead } from './publisher.js';
+import { buildReviewPreview } from './publisher.js';
 import { ReviewStore } from './store.js';
 import type { ProviderAdapter, ReviewConfig, ReviewResult, Snapshot } from './types.js';
 
@@ -13,7 +12,6 @@ export interface AutomaticClient {
   capturePullRequestSnapshot(ref: PullRequestRef): Promise<Snapshot>;
   listPullRequestFiles(ref: PullRequestRef): Promise<readonly PullRequestFile[]>;
   publishReview(ref: PullRequestRef, payload: ReviewPreview): Promise<{ readonly reviewId: number; readonly url?: string }>;
-  updatePullRequestBody(ref: PullRequestRef, body: string, expectedHeadSha: string, expectedBodyHash?: string): Promise<void>;
   getCiStatus(ref: PullRequestRef, headSha: string, requiredChecks?: readonly string[]): Promise<{ readonly ready: boolean; readonly pending: boolean; readonly failed: boolean; readonly count: number; readonly details: readonly string[] }>;
   mergePullRequest(ref: PullRequestRef, headSha: string): Promise<{ readonly sha?: string; readonly url?: string }>;
 }
@@ -81,27 +79,16 @@ export class AutomaticReviewer {
           const snapshot = await this.#client.capturePullRequestSnapshot(pullRequest.ref);
           if (snapshot.headSha !== pullRequest.headSha) throw new Error(`PR head changed while snapshotting: listed ${pullRequest.headSha}, captured ${snapshot.headSha}`);
           const result = await this.#run(snapshot, this.#store);
-          if (result.outcome === 'completed_clean' || result.outcome === 'completed_findings') {
+          if ((result.outcome === 'completed_clean' || result.outcome === 'completed_findings') && result.secretFindings.length === 0) {
             const files = await this.#client.listPullRequestFiles(pullRequest.ref);
             const payload = buildReviewPreview(result, changedRightLines(files), this.#config.maxInlineFindings);
             assertLease();
             await this.#client.publishReview(pullRequest.ref, payload);
             this.#store.markPublication(result.reviewId, 'published');
             published += 1;
-            let summaryReady = true;
-            if (this.#config.updatePullRequestDescription) {
-              try {
-                assertLease();
-                const pr = await this.#client.getPullRequest(pullRequest.ref);
-                if (pr.headSha !== pullRequest.headSha) throw new Error('PR head changed before description update');
-                await this.#client.updatePullRequestBody(pullRequest.ref, mergeSummaryBody(pr.body, result), pullRequest.headSha, sha256(pr.body ?? ''));
-                summaries += 1;
-              } catch (error) {
-                summaryReady = false;
-                failed += 1;
-                console.error(JSON.stringify({ event: 'automatic_summary_failed', repository: `${pullRequest.ref.owner}/${pullRequest.ref.repo}`, pullRequest: pullRequest.ref.number, headSha: pullRequest.headSha, error: error instanceof Error ? error.message : 'unknown error' }));
-              }
-            }
+            // The review body already contains the summary. GitHub has no atomic
+            // compare-and-swap for PR description updates, so do not mutate it.
+            const summaryReady = true;
             assertLease();
             this.#store.completeAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 'completed', result.reviewId, 900_000, Date.now(), leaseGeneration);
             if (this.#config.autoMerge && summaryReady && result.outcome === 'completed_clean') {
@@ -133,11 +120,6 @@ export class AutomaticReviewer {
     if (!result || !mergeEligible(result)) return false;
     const pr = await this.#client.getPullRequest(pullRequest.ref);
     if (pr.state !== 'open' || pr.draft || pr.headSha !== pullRequest.headSha) return false;
-    if (this.#config.updatePullRequestDescription && !summaryCoversHead(pr.body, pullRequest.headSha)) {
-      await this.#client.updatePullRequestBody(pullRequest.ref, mergeSummaryBody(pr.body, result), pullRequest.headSha, sha256(pr.body ?? ''));
-      const updated = await this.#client.getPullRequest(pullRequest.ref);
-      if (updated.headSha !== pullRequest.headSha || !summaryCoversHead(updated.body, pullRequest.headSha)) return false;
-    }
     const ci = await this.#client.getCiStatus(pullRequest.ref, pullRequest.headSha, this.#config.requiredCiChecks);
     if (!ci.ready) return false;
     await this.#client.mergePullRequest(pullRequest.ref, pullRequest.headSha);

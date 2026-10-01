@@ -19,7 +19,7 @@ test('AI reviewer workflow is event-scoped, trusted, and fork-isolated', () => {
   assert.match(workflow, /REVIEWER_REPOSITORY: \$\{\{ github\.event\.repository\.full_name \}\}/);
   assert.match(workflow, /REVIEWER_GITHUB_REPOSITORIES: \$\{\{ github\.event\.repository\.full_name \}\}/);
   assert.match(workflow, /REVIEWER_PR_NUMBER: \$\{\{ github\.event\.pull_request\.number \}\}/);
-  assert.match(workflow, /REVIEWER_UPDATE_PR_DESCRIPTION: 'true'/);
+  assert.match(workflow, /REVIEWER_UPDATE_PR_DESCRIPTION: 'false'/);
   assert.match(workflow, /REVIEWER_AUTO_MERGE: 'true'/);
   assert.match(workflow, /REVIEWER_REQUIRED_CI_CHECKS: reviewer/);
   assert.equal((workflow.match(/pnpm --dir reviewer run poll-once/g) ?? []).length, 1);

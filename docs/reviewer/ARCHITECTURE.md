@@ -144,7 +144,7 @@ GitHub owns the visual thread presentation, including collapsed files, “outdat
 
 ## PR description and publication outbox
 
-The summary composer has two modes. A preview renders without mutating GitHub. The automatic watcher can update a marker-owned block when `REVIEWER_UPDATE_PR_DESCRIPTION=true`; it preserves all text outside the block. The planned markers are:
+The summary composer renders the BB AI summary in the GitHub review body and supports a local preview. Automatic PR-description mutation remains deferred because GitHub's REST update endpoint does not provide a proven atomic compare-and-swap for this operation. The planned markers remain available for a future guarded update:
 
 ```html
 <!-- BlackBox pull request summary starts here -->

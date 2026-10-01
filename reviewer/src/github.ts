@@ -33,7 +33,6 @@ export interface GitHubClient {
   previewReview(ref: PullRequestRef, payload: ReviewPreview): ReviewPreview;
   publishReview(ref: PullRequestRef, payload: ReviewPreview): Promise<{ readonly reviewId: number; readonly url?: string }>;
   listOpenPullRequests(repository: { readonly owner: string; readonly repo: string }): Promise<readonly PullRequestSummary[]>;
-  updatePullRequestBody(ref: PullRequestRef, body: string, expectedHeadSha: string, expectedBodyHash?: string): Promise<void>;
   getCiStatus(ref: PullRequestRef, headSha: string, requiredChecks?: readonly string[]): Promise<CiStatus>;
   mergePullRequest(ref: PullRequestRef, headSha: string): Promise<{ readonly sha?: string; readonly url?: string }>;
 }
@@ -47,7 +46,7 @@ export class GitHubApi implements GitHubClient {
   constructor(token: string | undefined, fetcher: typeof fetch = fetch, apiBase = 'https://api.github.com') { this.#token = token; this.#fetch = fetcher; this.#apiBase = apiBase.replace(/\/$/, ''); }
 
   async getPullRequest(ref: PullRequestRef): Promise<PullRequestSnapshot> {
-    const row = record((await this.#requestWithHeaders(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/pulls/${ref.number}`)).value);
+    const row = record(await this.#request(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/pulls/${ref.number}`));
     const base = record(row.base); const head = record(row.head);
     return { ref, baseSha: string(base.sha), headSha: string(head.sha), title: string(row.title), body: row.body === null ? null : string(row.body), draft: row.draft === true, state: row.state === 'closed' ? 'closed' : 'open', mergeableState: typeof row.mergeable_state === 'string' ? row.mergeable_state : undefined };
   }
@@ -92,18 +91,6 @@ export class GitHubApi implements GitHubClient {
     return { reviewId: integer(row.id), url: typeof row.html_url === 'string' ? row.html_url : undefined };
   }
 
-  async updatePullRequestBody(ref: PullRequestRef, body: string, expectedHeadSha: string, expectedBodyHash?: string): Promise<void> {
-    if (!this.#token) throw new Error('GitHub PR updates require a write token');
-    const currentResponse = await this.#requestWithHeaders(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/pulls/${ref.number}`);
-    const row = record(currentResponse.value); const base = record(row.base); const head = record(row.head);
-    const current: PullRequestSnapshot = { ref, baseSha: string(base.sha), headSha: string(head.sha), title: string(row.title), body: row.body === null ? null : string(row.body), draft: row.draft === true, state: row.state === 'closed' ? 'closed' : 'open', mergeableState: typeof row.mergeable_state === 'string' ? row.mergeable_state : undefined };
-    if (current.state !== 'open') throw new Error('cannot update a closed pull request');
-    if (current.headSha !== expectedHeadSha) throw new Error(`PR head changed before description update: expected ${expectedHeadSha}, found ${current.headSha}`);
-    if (expectedBodyHash !== undefined && sha256(current.body ?? '') !== expectedBodyHash) throw new Error('PR description changed before summary update');
-    await this.#request(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/pulls/${ref.number}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ body }) });
-    const updated = await this.getPullRequest(ref);
-    if (updated.headSha !== expectedHeadSha || updated.body !== body) throw new Error('PR description changed during summary update');
-  }
 
   async getCiStatus(ref: PullRequestRef, headSha: string, requiredChecks?: readonly string[]): Promise<CiStatus> {
     const [checksValue, statusValue] = await Promise.all([
@@ -163,10 +150,6 @@ export class GitHubApi implements GitHubClient {
   }
 
   async #request(path: string, init: RequestInit = {}): Promise<unknown> {
-    return (await this.#requestWithHeaders(path, init)).value;
-  }
-
-  async #requestWithHeaders(path: string, init: RequestInit = {}): Promise<{ readonly value: unknown; readonly headers: Headers }> {
     const response = await this.#fetch(`${this.#apiBase}${path}`, { ...init, headers: { accept: 'application/vnd.github+json', ...(this.#token ? { authorization: `Bearer ${this.#token}` } : {}), 'x-github-api-version': '2022-11-28', 'user-agent': 'Black-Box-Reviewer', ...(init.headers ?? {}) }, signal: init.signal ?? AbortSignal.timeout(30_000) });
     const text = await response.text();
     const value: unknown = text ? JSON.parse(text) : undefined;
@@ -178,7 +161,7 @@ export class GitHubApi implements GitHubClient {
       } catch { /* preserve the status when GitHub returns a non-JSON error */ }
       throw new Error(`GitHub API returned HTTP ${response.status}${detail}`);
     }
-    return { value, headers: response.headers };
+    return value;
   }
 }
 

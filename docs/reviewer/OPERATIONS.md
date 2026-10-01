@@ -18,7 +18,7 @@ Custom rules and knowledge-base files are versioned operational data. On startup
 
 The agent-mode CLI and read-only API/MCP contract should expose only finding status, evidence references, validated context, export, and suggested-fix text. Test each client integration against a credential-free fixture. Do not give an agent the publisher token, model key, shell, arbitrary URL fetch, rule-write path, or ability to resolve its own finding.
 
-The `BB CoPilot Bot` GitHub App needs `metadata: read`, `contents: write`, and `pull_requests: write` for automatic squash merging. GitHub calls the repository permission **Contents: Read and write**; its API representation is `"contents": "write"`. For reviews and PR-description updates alone, `contents: read` and `pull_requests: write` are sufficient.
+The `BB CoPilot Bot` GitHub App needs `metadata: read`, `contents: write`, and `pull_requests: write` for automatic squash merging. GitHub calls the repository permission **Contents: Read and write**; its API representation is `"contents": "write"`. The current reviewer publishes review bodies and inline comments. PR-description updates remain deferred until a proven atomic compare-and-swap mechanism exists.
 
 The App permission is configured and verified for the current installation: `contents: write` and `pull_requests: write`. Keep the selected repository scope and refresh the installation token after changing App permissions. Automatic merge still requires the exact-head review, complete coverage, successful CI, and clean mergeability gates.
 

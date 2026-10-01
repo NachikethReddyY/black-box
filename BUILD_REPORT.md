@@ -7,7 +7,7 @@ Branch: `t3code/reviewer-project-scope`
 
 The repository now contains a connected P1 reviewer core in `reviewer/`. It captures exact local or GitHub PR snapshots, scans and redacts secrets before model packets, extracts bounded TypeScript context, runs correctness and security specialists, verifies candidates, persists evidence and cost state in SQLite, publishes one bounded GitHub `COMMENT` review with changed-line anchors, and watches configured repositories for new open PR heads.
 
-If `LUNA_API_KEY` is present, the default route is TokenRouter's OpenAI-compatible Luna endpoint with a bounded per-review reservation. `REVIEWER_LOCAL_ONLY=true` selects static-only mode. Automatic PR polling and marker-owned summary updates are opt-in. Runtime execution and generated fixes remain disabled. The GitHub workflow enables squash merging only after a complete clean review, passing CI, a non-draft open PR, exact head equality, and GitHub clean mergeability.
+If `LUNA_API_KEY` is present, the default route is TokenRouter's OpenAI-compatible Luna endpoint with a bounded per-review reservation. `REVIEWER_LOCAL_ONLY=true` selects static-only mode. Automatic PR polling is opt-in. The BB AI summary is included in the review body; PR-description mutation remains deferred until a proven atomic compare-and-swap mechanism exists. Runtime execution and generated fixes remain disabled. The GitHub workflow enables squash merging only after a complete clean review, passing required CI checks, a non-draft open PR, exact head equality, and GitHub clean mergeability.
 
 ## Implemented
 
