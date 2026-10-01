@@ -113,7 +113,7 @@ These commands act only when you invoke them explicitly:
 
 `start.sh` launches the already-configured `run.sh` process and records its PID and log under `$HOME/.local/share/black-box-runner/state`. It does not register a runner or install a service. `stop.sh` sends SIGTERM to the PID recorded by `start.sh`, prints `stopping`, and waits for process exit. It prints `runner stopped` only after the process exits; otherwise it reports `runner still running` and returns failure. The upstream `run.sh` source installs its process-group trap when `RUNNER_MANUALLY_TRAP_SIG` is set; this wrapper sets that documented mode. The service wrapper also converts SIGTERM to SIGINT, so this wrapper does not claim completion merely because a signal was sent.
 
-For native Ubuntu, use a systemd service for the runner after interactive registration. Keep the service user-scoped or owned by a dedicated unprivileged account. For WSL2, start the runner with the existing helper or a tested Windows startup task. Neither option changes GitHub's outbound-only connection model.
+For native Ubuntu, copy `config/black-box-runner.service.example` to `~/.config/systemd/user/black-box-runner.service` after interactive registration, replace `%h` only if your systemd version requires an absolute path, then run `systemctl --user daemon-reload && systemctl --user enable --now black-box-runner.service`. Keep the service user-scoped or owned by a dedicated unprivileged account. For WSL2, start the runner with the existing helper or a tested Windows startup task. Neither option changes GitHub's outbound-only connection model.
 
 ## Black Box CLI for agent-triggered runs
 
