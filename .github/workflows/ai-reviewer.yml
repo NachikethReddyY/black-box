@@ -41,7 +41,7 @@ jobs:
       REVIEWER_DATA_DIR: ${{ runner.temp }}/black-box-reviewer-data
       REVIEWER_CLOUD_BUDGET_USD: '0.10'
       REVIEWER_UPDATE_PR_DESCRIPTION: 'true'
-      REVIEWER_AUTO_MERGE: 'false'
+      REVIEWER_AUTO_MERGE: 'true'
       REVIEWER_REPOSITORY: ${{ github.event.repository.full_name }}
       REVIEWER_PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
