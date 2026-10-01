@@ -298,6 +298,25 @@ test('cloud pipeline uses two specialists and one verifier, then publishes only 
   store.close();
 });
 
+test('cloud pipeline bounds a provider evidence range to the selected file', async () => {
+  const root = tempRepo();
+  const cfg = config(root, { profile: 'economy_cloud_luna_v1', cloudBudgetUsd: 0.10 });
+  const snap = captureSnapshot(cfg, 'ref', 'HEAD');
+  const built = buildContext(snap, cfg.maxPacketBytes);
+  const sourceSha = snap.files.find((file) => file.path === 'index.ts')?.sha256 ?? '';
+  const candidate = { ...makeCandidate(sourceSha), evidence: [{ ...makeCandidate(sourceSha).evidence[0], end: 999 }], causalChangeRef: [{ ...makeCandidate(sourceSha).causalChangeRef[0], end: 999 }] };
+  const provider = new FakeProvider([
+    { candidates: [candidate], inputTokens: 10, outputTokens: 10, rawStatus: 'ok' },
+    { candidates: [], inputTokens: 10, outputTokens: 10, rawStatus: 'ok' },
+    { verifications: [{ candidateId: 'candidate-1', decision: 'supported', evidenceChecked: ['index.ts'], causalLink: 'introduced', verificationKind: 'model_assessment', reason: 'bounded evidence', uncertainty: '' }], inputTokens: 10, outputTokens: 10, rawStatus: 'ok' },
+  ]);
+  const store = new ReviewStore(cfg);
+  const result = await runReview(cfg, snap, built.packet, store, { authorizeCloud: true, provider });
+  assert.equal(result.outcome, 'completed_findings');
+  assert.equal(result.findings[0]?.candidate.evidence[0]?.end, 2);
+  store.close();
+});
+
 test('verifier output cannot claim runtime proof or omit a candidate', async () => {
   const root = tempRepo();
   const cfg = config(root, { profile: 'economy_cloud_luna_v1', cloudBudgetUsd: 0.10 });

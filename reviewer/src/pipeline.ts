@@ -118,8 +118,9 @@ function normalizeCandidateEvidence(candidate: Candidate, snapshot: Snapshot, pa
   const selected = new Map(packet.files.map((file) => [file.path, file]));
   const normalize = (ref: Candidate['evidence'][number]): Candidate['evidence'][number] => {
     const file = selected.get(ref.path);
-    if (!file || file.binary || ref.start < 1 || ref.end < ref.start || ref.end > file.content.split('\n').length) throw new Error(`provider evidence is outside the selected snapshot: ${ref.path}:${ref.start}-${ref.end}`);
-    return { ...ref, sha256: file.sha256 };
+    const lineCount = file?.content.split('\n').length ?? 0;
+    if (!file || file.binary || ref.start < 1 || ref.start > lineCount || ref.end < ref.start) throw new Error(`provider evidence is outside the selected snapshot: ${ref.path}:${ref.start}-${ref.end}`);
+    return { ...ref, end: Math.min(ref.end, lineCount), sha256: file.sha256 };
   };
   const causalChangeRef = candidate.causalChangeRef.map(normalize);
   if (candidate.changeRelevance === 'introduced' || candidate.changeRelevance === 'worsened') {
