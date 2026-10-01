@@ -9,7 +9,7 @@ const workflow = readFileSync(resolve(repositoryRoot, '.github/workflows/ai-revi
 
 test('AI reviewer workflow is event-scoped, trusted, and fork-isolated', () => {
   const trigger = workflow.slice(workflow.indexOf('on:'), workflow.indexOf('permissions:'));
-  assert.match(trigger, /pull_request_target:\s+types:/);
+  assert.match(trigger, /pull_request:\s+types:/);
   for (const event of ['opened', 'synchronize', 'reopened', 'ready_for_review']) assert.match(trigger, new RegExp(`- ${event}\\b`));
 
   assert.match(workflow, /if: >-[\s\S]*head\.repo\.full_name == github\.repository/);

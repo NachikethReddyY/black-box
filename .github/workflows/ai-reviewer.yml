@@ -1,8 +1,8 @@
 name: AI pull request reviewer
 
 on:
-  # The base-branch workflow is trusted; the job below still rejects fork heads.
-  pull_request_target:
+  # Same-repository PRs only. Forks are rejected before the secret-bearing job.
+  pull_request:
     types:
       - opened
       - synchronize
