@@ -1,6 +1,6 @@
 # Black Box reviewer build report
 
-Date: 2026-09-30
+Date: 2026-10-01
 Branch: `t3code/reviewer-project-scope`
 
 ## Outcome
@@ -11,7 +11,7 @@ If `LUNA_API_KEY` is present, the default route is TokenRouter's OpenAI-compatib
 
 ## Implemented
 
-- Windows PC and WSL2-oriented local package with SQLite and local evidence storage.
+- Ubuntu self-hosted GitHub Actions runner path with a Windows/WSL2 local fallback, SQLite, and local evidence storage.
 - `working_tree`, `staged`, and exact-ref snapshots with content-derived `snapshot_id` values.
 - Local secret detection and redaction before outbound model context.
 - TypeScript AST symbols, changed-file context, test selection, path bounds, and omitted-scope reporting.
@@ -30,7 +30,7 @@ If `LUNA_API_KEY` is present, the default route is TokenRouter's OpenAI-compatib
 | Check | Result | Evidence |
 |---|---|---|
 | Reviewer typecheck | Passed | `cd reviewer && pnpm typecheck` |
-| Reviewer tests | Passed, 26 tests | `cd reviewer && pnpm test` |
+| Reviewer tests | Passed, 28 tests | `cd reviewer && pnpm test` |
 | CLI lifecycle | Passed: review, status, export, backup, restore | `reviewer` commands with temporary data directories |
 | Offline smoke evaluation | Passed: clean control stayed clean and seeded bug was retained after verification | `cd reviewer && pnpm run evaluate` |
 | Public PR snapshot | Passed: `psf/requests#7628`, 128 files, exact head captured | `reviewer/evidence/public-pr-preview.json` |
@@ -43,13 +43,13 @@ If `LUNA_API_KEY` is present, the default route is TokenRouter's OpenAI-compatib
 
 ## AI and cost status
 
-The configured route is TokenRouter at `https://api.tokenrouter.com/v1` using `openai/gpt-5.6-luna`. Three bounded automatic reviews on PR #1 recorded estimated costs of `$0.006013`, `$0.006473`, and `$0.005821`, all below the `$0.10` per-review ceiling. They were published by `bb-copilot-bot[bot]` with inline findings and marker-owned summaries. The watcher uses the GitHub App installation token and never a personal GitHub token.
+The configured route is TokenRouter at `https://api.tokenrouter.com/v1` using `openai/gpt-5.6-luna`. One bounded live review on PR #1 recorded an estimated cost of `$0.010587`, below the `$0.10` per-review ceiling. It was published by `bb-copilot-bot[bot]` with two changed-line findings and a marker-owned summary. The workflow uses the GitHub App installation token and never a personal GitHub token.
 
 The offline evaluation is an engineering smoke test, not a quality benchmark. It has one clean control and one seeded bug fixture. It does not establish precision, recall, latency, or model quality on real pull requests.
 
 ## Deployment status
 
-The package is designed for the Windows PC's WSL2 Linux filesystem. The OrbStack probe could not reach the supplied VM. `ubuntu.orb.local` resolved to a different local address and SSH returned `No route to host`; no host or VM mutation was attempted. See `reviewer/evidence/orbstack-connectivity.txt`. WSL2 deployment is `deployment_not_verified`.
+The automatic workflow is designed for the owner's Ubuntu host and requires an online `black-box-reviewer` self-hosted runner. The current repository inventory reports zero registered runners, so Ubuntu deployment and GitHub job execution remain `deployment_not_verified`. A prior OrbStack probe could not reach the supplied VM; no host mutation was attempted. See `reviewer/evidence/orbstack-connectivity.txt`.
 
 ## Known limits
 
@@ -59,7 +59,7 @@ The package is designed for the Windows PC's WSL2 Linux filesystem. The OrbStack
 - Model findings are advisory and require verifier support. Runtime evidence cannot be claimed in P1.
 - `pr-review` and the automatic watcher publish only exact PR-head `COMMENT` reviews. The watcher edits only its marker block in the PR description, never human text. It does not create issue comments or request changes.
 - The reviewer depends on the configured TokenRouter account, model catalog, and returned usage fields. A missing or invalid route makes the run incomplete without publication.
-- T-22, feedback learning, knowledge-base lifecycle, runtime sandbox execution, and scheduled/automatic agents remain P2/P3 work.
+- T-22, feedback learning, knowledge-base lifecycle, runtime sandbox execution, and scheduled agent profiles remain P2/P3 work. The owner-authored GitHub Actions PR trigger is now implemented.
 - The watcher was installed and observed active in WSL2 at `VBook`; the host later went offline, so long-term restart persistence remains unverified until the PC is online again.
 - Invoking the CLI from `reviewer/` discovers the enclosing Git worktree; `REVIEWER_ROOT` remains the explicit override.
 
@@ -80,6 +80,6 @@ With `LUNA_API_KEY` in `.env` and `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`,
 
 ## Checkpoint
 
-The implementation and evidence are ready in PR #1. The App-authenticated automatic path has been exercised on three real heads: the bot posted inline findings and updated the summary. CI passed on each tested head. The PR remains open because the latest findings are not resolved and the packet reports partial coverage, so the fail-closed merge gate correctly did not squash merge it. As verified on 30 September 2026, both the App and installation still have `contents: read`. Automatic merge requires **Contents: Read and write** (`contents: write`), installation approval if requested, and verification with a fresh token. The permission update was not applied: browser control was interrupted by user activity and the attempted App API update returned HTTP 404. The CI workflow retains its separate read-only token. No merge, host restart, firewall change, or external infrastructure purchase was performed.
+The implementation and evidence are ready in PR #1. One bounded live head review was exercised after the bot workflow was wired: `bb-copilot-bot[bot]` posted two changed-line findings and updated the marker-owned summary at a cost of `$0.010587`. The later security fixes are on the current head, so that summary is superseded until the next automatic run. CI passes on the current head. The PR remains open because no Ubuntu runner is registered for the automatic workflow, the latest head has not had a fresh cloud review, and automatic merge is disabled. No host restart, firewall change, or external infrastructure purchase was performed.
 
 Generated by GPT-6 Sol through T3 Code.

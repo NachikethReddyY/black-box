@@ -1,6 +1,6 @@
 # Black Box reviewer
 
-The reviewer is a local TypeScript service for evidence-backed pull-request review. It is designed to run on the Windows PC inside WSL2. Keep its SQLite database, snapshots, and reports on the WSL2 Linux filesystem.
+The reviewer is a TypeScript service for evidence-backed pull-request review. Automatic PR reviews run on an Ubuntu GitHub Actions self-hosted runner labeled `black-box-reviewer`; GitHub connects over the runner's outbound HTTPS session. A Windows PC inside WSL2 remains a local fallback. Keep SQLite, snapshots, and reports on the Linux filesystem.
 
 ## Commands
 
@@ -22,7 +22,7 @@ pnpm test
 pnpm typecheck
 ```
 
-When `LUNA_API_KEY` or `TOKENROUTER_API_KEY` is present, the CLI selects the TokenRouter Luna route at `https://api.tokenrouter.com/v1` and reserves at most `$0.10` for one PR review. Use `REVIEWER_LOCAL_ONLY=true` for a static-only run. `pr-review OWNER REPO NUMBER` captures the exact PR revision, runs the correctness and security specialists plus the verifier, then submits one GitHub `COMMENT` review containing every validated changed-line finding. It never edits the PR description, creates issue comments, or requests changes. Publication requires a GitHub App ID, installation ID, and mode-600 private key file. The published review is authored by that App installation, not your personal GitHub account.
+When `LUNA_API_KEY` or `TOKENROUTER_API_KEY` is present, the CLI selects the TokenRouter Luna route at `https://api.tokenrouter.com/v1` and reserves at most `$0.10` for one PR review. Use `REVIEWER_LOCAL_ONLY=true` for a static-only run. `pr-review OWNER REPO NUMBER` captures the exact PR revision, runs the correctness and security specialists plus the verifier, then submits one GitHub `COMMENT` review containing every validated changed-line finding and, when enabled, updates only the marker-owned PR summary. Publication requires a GitHub App ID, installation ID, and either a protected private-key file or an in-memory private key. The published review is authored by that App installation, not your personal GitHub account.
 
 Run the commands from either the repository root with `pnpm --dir reviewer ...` or from `reviewer/` with `pnpm ...`. The CLI discovers the enclosing Git worktree by default. Set `REVIEWER_ROOT` when the repository is elsewhere and `REVIEWER_ENV_FILE` when credentials live outside the default `.env` locations.
 
@@ -31,6 +31,8 @@ Supported profiles are `economy_cloud_tokenrouter_luna_v1` for the configured To
 `serve` binds only to `127.0.0.1`. `/healthz` is unauthenticated for local process checks; `/status` requires `Authorization: Bearer $REVIEWER_STATUS_TOKEN` and returns SQLite integrity plus review metadata. Stop it with `Ctrl-C` or `SIGTERM`. It does not authorize reviews, model spending, repository writes, or GitHub publication.
 
 `watch` polls the explicitly configured `REVIEWER_GITHUB_REPOSITORIES` with the GitHub App installation token. It considers open PRs, skips drafts by default, and reviews at most `REVIEWER_MAX_AUTOMATIC_REVIEWS_PER_POLL` new head revisions per cycle. A durable SQLite claim prevents duplicate reviews after normal polling or a restart. Set `REVIEWER_INCLUDE_DRAFTS=true` only when you deliberately want draft PRs reviewed. With `REVIEWER_UPDATE_PR_DESCRIPTION=true`, it updates only the BlackBox marker block in the PR body. With `REVIEWER_AUTO_MERGE=true`, it can squash-merge only a non-draft, clean PR with a clean review, successful completed checks, and the exact reviewed head. It never merges when checks are pending, failed, missing, or the mergeable state is not clean. The watcher polls every `REVIEWER_POLL_INTERVAL_SECONDS` seconds and backs off failed heads for 15 minutes.
+
+The automatic workflow in `.github/workflows/ai-reviewer.yml` handles owner-authored same-repository PR events (`opened`, `synchronize`, `reopened`, and `ready_for_review`). It checks out the trusted base revision, reads the PR through the GitHub API, posts as BB CoPilot Bot, and requires the encrypted `LUNA_API_KEY`, `BB_GITHUB_APP_ID`, `BB_GITHUB_APP_INSTALLATION_ID`, and `BB_GITHUB_APP_PRIVATE_KEY` secrets. Forks and collaborator-authored PRs are skipped until an explicit authorization policy is added.
 
 Automatic merge also requires the GitHub App's **Repository permissions > Contents > Read and write** setting, represented as `"contents": "write"` by the API, plus `pull_requests: write`. Save the App change, accept the installation's permission update if requested, and use a fresh installation token. Keep repository access limited to the intended repositories. The CI workflow's `permissions: contents: read` applies to a separate token and remains read-only. See [operations](../docs/reviewer/OPERATIONS.md) for the last verified installation state.
 
