@@ -7,7 +7,7 @@ const REVIEWED_HEAD_PREFIX = '<!-- BlackBox reviewed-head: ';
 
 export interface MergeabilityAssessment {
   readonly score: number;
-  readonly label: 'Ready for merge review' | 'Needs changes' | 'Blocked';
+  readonly label: 'Ready for merge review' | 'Needs changes' | 'Limited coverage' | 'Blocked';
   readonly reasons: readonly string[];
 }
 
@@ -24,7 +24,7 @@ export function assessMergeability(result: ReviewResult): MergeabilityAssessment
   const reasons: string[] = [];
   if (!result.coverage.complete) {
     score -= 25;
-    reasons.push('Some files could not be fully checked.');
+    reasons.push(`${result.coverage.omittedPaths.length} changed file${result.coverage.omittedPaths.length === 1 ? '' : 's'} were outside the review context.`);
   }
   for (const finding of result.findings) {
     const penalty = finding.candidate.severity === 'critical' ? 40
@@ -40,6 +40,8 @@ export function assessMergeability(result: ReviewResult): MergeabilityAssessment
   score = Math.max(0, Math.min(100, score));
   const label = result.outcome === 'completed_clean' && result.findings.length === 0 && result.coverage.complete
     ? 'Ready for merge review'
+    : result.outcome === 'completed_clean' && result.findings.length === 0 && !result.coverage.complete
+      ? 'Limited coverage'
     : score >= 70 ? 'Needs changes' : 'Blocked';
   return { score, label, reasons };
 }
@@ -60,7 +62,7 @@ export function buildReviewPreview(result: ReviewResult, changedLines?: Readonly
 function summaryBody(result: ReviewResult): string {
   const assessment = assessMergeability(result);
   const verdict = result.outcome === 'completed_findings' ? 'Changes need attention' : result.outcome === 'completed_clean' ? 'No supported issues found' : 'Review incomplete';
-  return ['## BB AI review', '', `Result: ${verdict}.`, `Mergeability: ${assessment.score}/100 — ${assessment.label}.`, `Why: ${assessment.reasons.join(' ')}`, `Findings: ${result.findings.length === 0 ? 'None.' : `${result.findings.length} inline issue(s).`}`, `Coverage: ${result.coverage.complete ? 'Complete.' : 'Partial.'}`, 'Written by: BB AI.', result.error ? `Status: ${result.error}` : ''].filter(Boolean).join('\n');
+  return ['## BB AI review', '', `Result: ${verdict}.`, `Mergeability: ${assessment.score}/100 — ${assessment.label}.`, `Why: ${assessment.reasons.join(' ')}`, `Findings: ${result.findings.length === 0 ? 'None.' : `${result.findings.length} inline issue(s).`}`, coverageLine(result), 'Written by: BB AI.', result.error ? `Status: ${result.error}` : ''].filter(Boolean).join('\n');
 }
 
 function commentBody(finding: ReviewResult['findings'][number]): string {
@@ -93,5 +95,11 @@ function summaryLines(result: ReviewResult): string[] {
   const verdict = result.outcome === 'completed_findings' ? 'Changes need attention' : result.outcome === 'completed_clean' ? 'No supported issues found' : 'Review incomplete';
   const findings = result.findings.length === 0 ? 'Findings: None.' : `Findings: ${result.findings.length} inline issue${result.findings.length === 1 ? '' : 's'} need attention.`;
   const nextStep = result.outcome === 'completed_clean' && result.coverage.complete ? 'Next step: Review CI, then merge when ready.' : result.findings.length > 0 ? 'Next step: Fix the inline issues and push a new commit.' : 'Next step: Run the review again after the missing checks are available.';
-  return [`Result: ${verdict}.`, `Mergeability: ${assessment.score}/100 — ${assessment.label}.`, `Why: ${assessment.reasons.join(' ')}`, findings, `Coverage: ${result.coverage.complete ? 'Complete.' : 'Partial. Some files could not be fully checked.'}`, nextStep, 'Written by: BB AI.'];
+  return [`Result: ${verdict}.`, `Mergeability: ${assessment.score}/100 — ${assessment.label}.`, `Why: ${assessment.reasons.join(' ')}`, findings, coverageLine(result), nextStep, 'Written by: BB AI.'];
+}
+
+function coverageLine(result: ReviewResult): string {
+  if (result.coverage.complete) return 'Coverage: Complete.';
+  const count = result.coverage.omittedPaths.length;
+  return `Coverage: Limited. ${count} changed file${count === 1 ? '' : 's'} outside the review context.`;
 }

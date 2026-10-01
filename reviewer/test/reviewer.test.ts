@@ -178,6 +178,7 @@ test('PR summaries replace only the BlackBox marker block', () => {
   assert.match(updated, /After text/);
   assert.match(updated, /No supported issues found/);
   assert.match(updated, /Mergeability: 100\/100 — Ready for merge review/);
+  assert.match(updated, /Coverage: Complete/);
   assert.match(updated, /Written by: BB AI/);
   assert.doesNotMatch(updated, /Estimated cost|Revision:|Changed files:|Reviewed by:/);
   assert.equal((updated.match(new RegExp(SUMMARY_START, 'g')) ?? []).length, 1);
@@ -195,6 +196,8 @@ test('mergeability is deterministic and blocks incomplete reviews', () => {
   assert.deepEqual(assessMergeability(finding), { score: 75, label: 'Needs changes', reasons: ['1 inline issue need attention.'] });
   const incomplete = { ...clean, outcome: 'incomplete' as const, coverage: { selectedPaths: [], omittedPaths: ['index.ts'], complete: false } };
   assert.deepEqual(assessMergeability(incomplete), { score: 0, label: 'Blocked', reasons: ['The review did not finish.'] });
+  const partialClean = { ...clean, coverage: { selectedPaths: ['index.ts'], omittedPaths: ['other.ts', 'third.ts'], complete: false } };
+  assert.deepEqual(assessMergeability(partialClean), { score: 75, label: 'Limited coverage', reasons: ['2 changed files were outside the review context.', 'No supported issues were found.'] });
 });
 
 test('automatic clean reviews squash merge only after successful CI and clean mergeability', async () => {
