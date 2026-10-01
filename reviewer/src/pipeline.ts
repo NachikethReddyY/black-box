@@ -48,6 +48,7 @@ export async function runReview(config: ReviewConfig, snapshot: Snapshot, packet
       for (const candidate of response.candidates ?? []) candidates.push(normalizeCandidateEvidence(candidate, snapshot, packet));
     }
     candidates = dedupe(candidates);
+    candidates = uniqueCandidateIds(candidates);
     const response = await attempt(provider, store, reviewId, 'verifier', { role: 'verifier', snapshotId: snapshot.id, packet, candidates, requestId: `${reviewId}:verifier:0`, maxOutputTokens: config.maxOutputTokens }, maxCostCents / config.maxAttempts);
     attempts += 1;
     estimatedCostUsd += cost(response.inputTokens, response.outputTokens, provider);
@@ -86,6 +87,19 @@ function dedupe(candidates: readonly Candidate[]): Candidate[] {
     if (!seen.has(key)) seen.set(key, candidate);
   }
   return [...seen.values()].slice(0, 12);
+}
+
+function uniqueCandidateIds(candidates: readonly Candidate[]): Candidate[] {
+  const seen = new Set<string>();
+  return candidates.map((candidate, index) => {
+    if (!seen.has(candidate.candidateId)) {
+      seen.add(candidate.candidateId);
+      return candidate;
+    }
+    const candidateId = id('candidate', `${candidate.candidateId}:${index}:${candidate.title}:${candidate.causalChangeRef.map((ref) => `${ref.path}:${ref.start}`).join(',')}`);
+    seen.add(candidateId);
+    return { ...candidate, candidateId };
+  });
 }
 
 function validateVerificationSet(candidates: readonly Candidate[], verifications: readonly Verification[]): Verification[] {

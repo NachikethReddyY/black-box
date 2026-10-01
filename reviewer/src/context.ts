@@ -5,7 +5,10 @@ import type { ContextPacket, EvidenceRef, RedactionResult, Snapshot, SourceFile,
 
 export function buildContext(snapshot: Snapshot, maxPacketBytes: number): { packet: ContextPacket; redaction: RedactionResult } {
   const selected = selectFiles(snapshot);
-  const redaction = scanAndRedact(selected);
+  const scanTargets = [...new Map([...selected, ...snapshot.files.filter((file) => snapshot.changedPaths.includes(file.path))].map((file) => [file.path, file])).values()];
+  const scanned = scanAndRedact(scanTargets);
+  const selectedPaths = new Set(selected.map((file) => file.path));
+  const redaction = { ...scanned, files: scanned.files.filter((file) => selectedPaths.has(file.path)) };
   const symbols = redaction.files.flatMap(parseSymbols);
   const evidence = redaction.files.flatMap((file) => {
     if (!snapshot.changedPaths.includes(file.path) || file.binary) return [];
