@@ -169,14 +169,14 @@ async function prPreview(): Promise<void> {
   const api = new GitHubApi(githubToken(config.githubToken));
   const ref: PullRequestRef = { owner, repo, number };
   const snapshot = await api.capturePullRequestSnapshot(ref);
-  const { packet } = buildContext(snapshot, config.maxPacketBytes);
-  const store = new ReviewStore(config);
-  const provider = providerFor(config);
-  const result = await runReview(config, snapshot, packet, store, { provider, authorizeCloud: config.profile !== 'static_only' });
+  const previewConfig = config.profile === 'static_only' ? config : { ...config, profile: 'static_only' as const, cloudBudgetUsd: 0 };
+  const { packet } = buildContext(snapshot, previewConfig.maxPacketBytes);
+  const store = new ReviewStore(previewConfig);
+  const result = await runReview(previewConfig, snapshot, packet, store, { authorizeCloud: false });
   const reports = writeReports(result, `${config.dataDir}/${result.reviewId}`);
   const preview = api.previewReview(ref, buildReviewPreview(result, undefined, config.maxInlineFindings));
   store.close();
-  console.log(JSON.stringify({ repository: `${owner}/${repo}`, pullRequest: number, reviewId: result.reviewId, outcome: result.outcome, snapshotId: snapshot.id, files: snapshot.files.length, changedPaths: snapshot.changedPaths, report: reports, publication: { mode: 'preview', review: preview } }, null, 2));
+  console.log(JSON.stringify({ repository: `${owner}/${repo}`, pullRequest: number, reviewId: result.reviewId, outcome: result.outcome, cloud: 'disabled', snapshotId: snapshot.id, files: snapshot.files.length, changedPaths: snapshot.changedPaths, report: reports, publication: { mode: 'preview', review: preview } }, null, 2));
 }
 
 async function prReview(): Promise<void> {

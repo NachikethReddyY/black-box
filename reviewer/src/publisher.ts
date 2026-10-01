@@ -22,6 +22,10 @@ export function assessMergeability(result: ReviewResult): MergeabilityAssessment
 
   let score = 100;
   const reasons: string[] = [];
+  if (result.secretFindings.length > 0) {
+    score -= 100;
+    reasons.push(`${result.secretFindings.length} local secret finding${result.secretFindings.length === 1 ? '' : 's'} block merge.`);
+  }
   if (!result.coverage.complete) {
     score -= 25;
     reasons.push(`${result.coverage.omittedPaths.length} changed file${result.coverage.omittedPaths.length === 1 ? '' : 's'} were outside the review context.`);
@@ -38,7 +42,8 @@ export function assessMergeability(result: ReviewResult): MergeabilityAssessment
     reasons.push('No supported issues were found.');
   }
   score = Math.max(0, Math.min(100, score));
-  const label = result.outcome === 'completed_clean' && result.findings.length === 0 && result.coverage.complete
+  const label = result.secretFindings.length > 0 ? 'Blocked'
+    : result.outcome === 'completed_clean' && result.findings.length === 0 && result.coverage.complete
     ? 'Ready for merge review'
     : result.outcome === 'completed_clean' && result.findings.length === 0 && !result.coverage.complete
       ? 'Limited coverage'
@@ -62,7 +67,8 @@ export function buildReviewPreview(result: ReviewResult, changedLines?: Readonly
 function summaryBody(result: ReviewResult): string {
   const assessment = assessMergeability(result);
   const verdict = result.outcome === 'completed_findings' ? 'Changes need attention' : result.outcome === 'completed_clean' ? 'No supported issues found' : 'Review incomplete';
-  return ['## BB AI review', '', `Result: ${verdict}.`, `Mergeability: ${assessment.score}/100 — ${assessment.label}.`, `Why: ${assessment.reasons.join(' ')}`, `Findings: ${result.findings.length === 0 ? 'None.' : `${result.findings.length} inline issue(s).`}`, coverageLine(result), 'Written by: BB AI.', result.error ? `Status: ${result.error}` : ''].filter(Boolean).join('\n');
+  const findingLine = result.findings.length === 0 && result.secretFindings.length === 0 ? 'Findings: None.' : `Findings: ${result.findings.length} inline issue(s)${result.secretFindings.length > 0 ? `; ${result.secretFindings.length} secret finding(s)` : ''}.`;
+  return ['## BB AI review', '', `Result: ${verdict}.`, `Mergeability: ${assessment.score}/100 — ${assessment.label}.`, `Why: ${assessment.reasons.join(' ')}`, findingLine, coverageLine(result), 'Written by: BB AI.', result.error ? `Status: ${result.error}` : ''].filter(Boolean).join('\n');
 }
 
 function commentBody(finding: ReviewResult['findings'][number]): string {
@@ -93,7 +99,9 @@ export function summaryCoversHead(body: string | null, headSha: string): boolean
 function summaryLines(result: ReviewResult): string[] {
   const assessment = assessMergeability(result);
   const verdict = result.outcome === 'completed_findings' ? 'Changes need attention' : result.outcome === 'completed_clean' ? 'No supported issues found' : 'Review incomplete';
-  const findings = result.findings.length === 0 ? 'Findings: None.' : `Findings: ${result.findings.length} inline issue${result.findings.length === 1 ? '' : 's'} need attention.`;
+  const findings = result.findings.length === 0 && result.secretFindings.length === 0
+    ? 'Findings: None.'
+    : `Findings: ${result.findings.length} inline issue${result.findings.length === 1 ? '' : 's'}${result.secretFindings.length > 0 ? `; ${result.secretFindings.length} secret finding${result.secretFindings.length === 1 ? '' : 's'}` : ''} need attention.`;
   const nextStep = result.outcome === 'completed_clean' && result.coverage.complete ? 'Next step: Review CI, then merge when ready.' : result.findings.length > 0 ? 'Next step: Fix the inline issues and push a new commit.' : 'Next step: Run the review again after the missing checks are available.';
   return [`Result: ${verdict}.`, `Mergeability: ${assessment.score}/100 — ${assessment.label}.`, `Why: ${assessment.reasons.join(' ')}`, findings, coverageLine(result), nextStep, 'Written by: BB AI.'];
 }
