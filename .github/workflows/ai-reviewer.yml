@@ -46,6 +46,7 @@ jobs:
       REVIEWER_REPOSITORY: ${{ github.event.repository.full_name }}
       REVIEWER_GITHUB_REPOSITORIES: ${{ github.event.repository.full_name }}
       REVIEWER_PR_NUMBER: ${{ github.event.pull_request.number }}
+      REVIEWER_REQUIRED_CI_CHECKS: reviewer
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:

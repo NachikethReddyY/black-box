@@ -14,7 +14,7 @@ export interface AutomaticClient {
   listPullRequestFiles(ref: PullRequestRef): Promise<readonly PullRequestFile[]>;
   publishReview(ref: PullRequestRef, payload: ReviewPreview): Promise<{ readonly reviewId: number; readonly url?: string }>;
   updatePullRequestBody(ref: PullRequestRef, body: string, expectedHeadSha: string, expectedBodyHash?: string): Promise<void>;
-  getCiStatus(ref: PullRequestRef, headSha: string): Promise<{ readonly ready: boolean; readonly pending: boolean; readonly failed: boolean; readonly count: number; readonly details: readonly string[] }>;
+  getCiStatus(ref: PullRequestRef, headSha: string, requiredChecks?: readonly string[]): Promise<{ readonly ready: boolean; readonly pending: boolean; readonly failed: boolean; readonly count: number; readonly details: readonly string[] }>;
   mergePullRequest(ref: PullRequestRef, headSha: string): Promise<{ readonly sha?: string; readonly url?: string }>;
 }
 
@@ -57,7 +57,7 @@ export class AutomaticReviewer {
         if (reviewed >= limit) break;
         if (this.#config.automaticPullRequestNumber !== undefined && pullRequest.ref.number !== this.#config.automaticPullRequestNumber) continue;
         if (pullRequest.draft && !(this.#config.includeDrafts ?? false)) { skippedDrafts += 1; continue; }
-        if (pullRequest.authorLogin !== repository.owner) continue;
+        if (!pullRequest.authorLogin || pullRequest.authorLogin.toLowerCase() !== repository.owner.toLowerCase()) continue;
         const leaseGeneration = this.#store.claimAutomaticLease(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 15 * 60_000);
         if (leaseGeneration === undefined) {
           skippedProcessed += 1;
@@ -138,7 +138,7 @@ export class AutomaticReviewer {
       const updated = await this.#client.getPullRequest(pullRequest.ref);
       if (updated.headSha !== pullRequest.headSha || !summaryCoversHead(updated.body, pullRequest.headSha)) return false;
     }
-    const ci = await this.#client.getCiStatus(pullRequest.ref, pullRequest.headSha);
+    const ci = await this.#client.getCiStatus(pullRequest.ref, pullRequest.headSha, this.#config.requiredCiChecks);
     if (!ci.ready) return false;
     await this.#client.mergePullRequest(pullRequest.ref, pullRequest.headSha);
     this.#store.markAutomaticMerged(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha);

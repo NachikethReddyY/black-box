@@ -34,7 +34,7 @@ export interface GitHubClient {
   publishReview(ref: PullRequestRef, payload: ReviewPreview): Promise<{ readonly reviewId: number; readonly url?: string }>;
   listOpenPullRequests(repository: { readonly owner: string; readonly repo: string }): Promise<readonly PullRequestSummary[]>;
   updatePullRequestBody(ref: PullRequestRef, body: string, expectedHeadSha: string, expectedBodyHash?: string): Promise<void>;
-  getCiStatus(ref: PullRequestRef, headSha: string): Promise<CiStatus>;
+  getCiStatus(ref: PullRequestRef, headSha: string, requiredChecks?: readonly string[]): Promise<CiStatus>;
   mergePullRequest(ref: PullRequestRef, headSha: string): Promise<{ readonly sha?: string; readonly url?: string }>;
 }
 
@@ -105,7 +105,7 @@ export class GitHubApi implements GitHubClient {
     if (updated.headSha !== expectedHeadSha || updated.body !== body) throw new Error('PR description changed during summary update');
   }
 
-  async getCiStatus(ref: PullRequestRef, headSha: string): Promise<CiStatus> {
+  async getCiStatus(ref: PullRequestRef, headSha: string, requiredChecks?: readonly string[]): Promise<CiStatus> {
     const [checksValue, statusValue] = await Promise.all([
       this.#request(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/commits/${encodeURIComponent(headSha)}/check-runs?per_page=100`),
       this.#request(`/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}/commits/${encodeURIComponent(headSha)}/status`),
@@ -115,6 +115,16 @@ export class GitHubApi implements GitHubClient {
     const details: string[] = []; let pending = false; let failed = false;
     for (const value of checkRuns) { const row = record(value); const name = string(row.name); const conclusion = row.conclusion === null ? null : string(row.conclusion); details.push(`${name}:${conclusion ?? 'pending'}`); if (conclusion === null || row.status !== 'completed') pending = true; else if (conclusion !== 'success') failed = true; }
     for (const value of statuses) { const row = record(value); const context = string(row.context); const state = string(row.state); details.push(`${context}:${state}`); if (state === 'pending') pending = true; else if (state !== 'success') failed = true; }
+    if (requiredChecks && requiredChecks.length > 0) {
+      const observed = new Map<string, { readonly pending: boolean; readonly success: boolean }>();
+      for (const value of checkRuns) { const row = record(value); const name = string(row.name); observed.set(name, { pending: row.conclusion === null || row.status !== 'completed', success: row.conclusion === 'success' && row.status === 'completed' }); }
+      for (const value of statuses) { const row = record(value); const name = string(row.context); observed.set(name, { pending: row.state === 'pending', success: row.state === 'success' }); }
+      for (const required of requiredChecks) {
+        const state = observed.get(required);
+        if (!state || state.pending) pending = true;
+        else if (!state.success) failed = true;
+      }
+    }
     const count = checkRuns.length + statuses.length;
     return { ready: count > 0 && !pending && !failed, pending, failed, count, details };
   }

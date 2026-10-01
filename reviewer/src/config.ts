@@ -39,6 +39,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env, cwd = proces
   if (pollIntervalMs < 15_000) throw new Error('REVIEWER_POLL_INTERVAL_SECONDS must be at least 15');
   const maxAutomaticReviewsPerPoll = integer(env.REVIEWER_MAX_AUTOMATIC_REVIEWS_PER_POLL, 1);
   if (maxAutomaticReviewsPerPoll < 1 || maxAutomaticReviewsPerPoll > 10) throw new Error('REVIEWER_MAX_AUTOMATIC_REVIEWS_PER_POLL must be between 1 and 10');
+  const requiredCiChecks = parseChecks(env.REVIEWER_REQUIRED_CI_CHECKS, ['reviewer']);
   const automaticPullRequestNumber = env.REVIEWER_PR_NUMBER === undefined ? undefined : integer(env.REVIEWER_PR_NUMBER, 0);
   if (automaticPullRequestNumber !== undefined && automaticPullRequestNumber < 1) throw new Error('REVIEWER_PR_NUMBER must be a positive integer');
   return {
@@ -63,10 +64,16 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env, cwd = proces
     githubRepositories,
     pollIntervalMs,
     includeDrafts: env.REVIEWER_INCLUDE_DRAFTS === 'true',
-    maxAutomaticReviewsPerPoll, automaticPullRequestNumber,
+    maxAutomaticReviewsPerPoll, requiredCiChecks, automaticPullRequestNumber,
     updatePullRequestDescription: env.REVIEWER_UPDATE_PR_DESCRIPTION === 'true',
     autoMerge: env.REVIEWER_AUTO_MERGE === 'true',
   };
+}
+
+function parseChecks(value: string | undefined, fallback: readonly string[]): readonly string[] {
+  const checks = (value === undefined ? fallback : value.split(',')).map((check) => check.trim()).filter(Boolean);
+  if (checks.length === 0 || checks.some((check) => check.length > 100)) throw new Error('REVIEWER_REQUIRED_CI_CHECKS must contain at least one short check name');
+  return [...new Set(checks)];
 }
 
 function parseRepositories(value: string | undefined): readonly RepositoryRef[] {
