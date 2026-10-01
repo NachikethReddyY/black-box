@@ -204,7 +204,7 @@ test('mergeability is deterministic and blocks incomplete reviews', () => {
   assert.deepEqual(assessMergeability(partialClean), { score: 75, label: 'Limited coverage', reasons: ['2 changed files were outside the review context.', 'No supported issues were found.'] });
 });
 
-test('automatic clean reviews squash merge only after successful CI and clean mergeability', async () => {
+test('static-only automatic reviews never satisfy the cloud merge gate', async () => {
   const root = tempRepo();
   const cfg = config(root, { profile: 'static_only', githubRepositories: [{ owner: 'owner', repo: 'repo' }], autoMerge: true });
   const snapshot = captureSnapshot(cfg, 'ref', 'HEAD');
@@ -221,9 +221,10 @@ test('automatic clean reviews squash merge only after successful CI and clean me
   };
   const store = new ReviewStore(cfg);
   const cycle = await new AutomaticReviewer(cfg, store, client).pollOnce();
-  assert.equal(cycle.merged, 1);
-  assert.equal(mergeCalls, 1);
-  assert.equal(store.getAutomaticHead('owner', 'repo', 1, snapshot.headSha ?? 'head')?.status, 'merged');
+  assert.equal(cycle.merged, 0);
+  assert.equal(cycle.waitingForCi, 1);
+  assert.equal(mergeCalls, 0);
+  assert.equal(store.getAutomaticHead('owner', 'repo', 1, snapshot.headSha ?? 'head')?.status, 'completed');
   store.close();
 });
 

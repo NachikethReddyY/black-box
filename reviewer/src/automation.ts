@@ -145,7 +145,7 @@ function mergeEligible(result: ReviewResult): boolean {
     && result.coverage.complete
     && result.deterministicSecurityCheck?.secretScanCompleted === true
     && result.deterministicSecurityCheck.findings === 0
-    && (result.profile === 'static_only' || result.attempts >= 3)
+    && result.attempts >= 3
     && result.verifications.every((verification) => verification.decision === 'supported' || verification.decision === 'rejected');
 }
 

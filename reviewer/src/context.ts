@@ -13,7 +13,7 @@ export function buildContext(snapshot: Snapshot, maxPacketBytes: number): { pack
   });
   let files = redaction.files;
   let packet = makePacket(files, symbols, evidence, redaction.findings, snapshot);
-  while (Buffer.byteLength(JSON.stringify(packet), 'utf8') > maxPacketBytes && files.length > 1) {
+  while (Buffer.byteLength(JSON.stringify(packet), 'utf8') > maxPacketBytes && files.length > 0) {
     files = files.slice(0, -1);
     packet = makePacket(files, symbols.filter((symbol) => files.some((file) => file.path === symbol.path)), evidence.filter((ref) => files.some((file) => file.path === ref.path)), redaction.findings.filter((finding) => files.some((file) => file.path === finding.path)), snapshot);
   }
