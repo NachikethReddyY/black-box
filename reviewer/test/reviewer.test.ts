@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { configFromEnv, parseDotEnv } from '../src/config.js';
 import { buildContext } from '../src/context.js';
-import { id } from '../src/hash.js';
+import { id, sha256 } from '../src/hash.js';
 import { createResponsesProvider, FakeProvider, OPENAI_ROUTE, ResponsesProvider, TOKENROUTER_ROUTE } from '../src/provider.js';
 import { runReview } from '../src/pipeline.js';
 import { reportMarkdown } from '../src/report.js';
@@ -124,6 +124,21 @@ test('automatic head claims are durable and suppress duplicate polling', () => {
   store.completeAutomaticHead('owner', 'repo', 1, 'head', 'completed', 'review-1', 60_000, 1_002);
   assert.equal(store.claimAutomaticHead('owner', 'repo', 1, 'head', 60_000, 1_003), false);
   assert.equal(store.claimAutomaticHead('owner', 'repo', 1, 'new-head', 60_000, 1_004), true);
+  store.close();
+});
+
+test('expired automatic leases cannot complete after a replacement worker claims the head', () => {
+  const cfg = config(tempRepo());
+  const store = new ReviewStore(cfg);
+  const first = store.claimAutomaticLease('owner', 'repo', 1, 'head', 60_000, 1_000);
+  assert.equal(first, 1);
+  assert.equal(store.claimAutomaticLease('owner', 'repo', 1, 'head', 60_000, 1_001), undefined);
+  const replacement = store.claimAutomaticLease('owner', 'repo', 1, 'head', 60_000, 61_001);
+  assert.equal(replacement, 2);
+  store.completeAutomaticHead('owner', 'repo', 1, 'head', 'completed', 'stale-review', 60_000, 61_002, first);
+  assert.equal(store.getAutomaticHead('owner', 'repo', 1, 'head')?.status, 'processing');
+  store.completeAutomaticHead('owner', 'repo', 1, 'head', 'completed', 'replacement-review', 60_000, 61_003, replacement);
+  assert.equal(store.getAutomaticHead('owner', 'repo', 1, 'head')?.reviewId, 'replacement-review');
   store.close();
 });
 
@@ -457,6 +472,22 @@ test('GitHub publisher posts one COMMENT review with only changed-line anchors',
   assert.equal(published.reviewId, 42);
   assert.equal(requests.at(-1)?.method, 'POST');
   assert.match(requests.at(-1)?.body ?? '', /"event":"COMMENT"/);
+});
+
+test('GitHub PR summary updates use an ETag conditional request', async () => {
+  const requests: { url: string; method: string; headers?: HeadersInit }[] = [];
+  const fetcher: typeof fetch = async (input, init) => {
+    const url = String(input);
+    requests.push({ url, method: init?.method ?? 'GET', headers: init?.headers });
+    if (url.endsWith('/pulls/7') && init?.method === 'PATCH') return new Response('{}', { status: 200 });
+    if (url.endsWith('/pulls/7')) return new Response(JSON.stringify({ base: { sha: 'base' }, head: { sha: 'head' }, title: 'Fixture', body: 'old', draft: false, state: 'open' }), { status: 200, headers: { etag: '"pr-v1"' } });
+    throw new Error(`unexpected request ${url}`);
+  };
+  const api = new GitHubApi('write-token', fetcher, 'https://github.test');
+  await api.updatePullRequestBody({ owner: 'owner', repo: 'repo', number: 7 }, 'new', 'head', sha256('old'));
+  const patch = requests.find((request) => request.method === 'PATCH');
+  assert.ok(patch);
+  assert.equal(new Headers(patch.headers).get('if-match'), '"pr-v1"');
 });
 
 test('GitHub diff parser identifies added right-side lines', () => {

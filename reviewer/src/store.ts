@@ -15,6 +15,7 @@ export interface AutomaticHeadRecord {
   readonly status: 'processing' | 'completed' | 'failed' | 'merged';
   readonly reviewId?: string;
   readonly leaseUntil: number;
+  readonly leaseGeneration: number;
 }
 
 export class ReviewStore {
@@ -75,9 +76,15 @@ export class ReviewStore {
         status TEXT NOT NULL,
         review_id TEXT,
         lease_until INTEGER NOT NULL,
+        lease_generation INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT NOT NULL
       );
     `);
+    try {
+      this.#db.exec('ALTER TABLE automatic_heads ADD COLUMN lease_generation INTEGER NOT NULL DEFAULT 0');
+    } catch (error) {
+      if (!(error instanceof Error) || !/duplicate column name/i.test(error.message)) throw error;
+    }
   }
 
   reserve(reviewId: ReviewId, maxAttempts: number, maxCostCents: number): Reservation {
@@ -137,34 +144,49 @@ export class ReviewStore {
   }
 
   claimAutomaticHead(owner: string, repo: string, pullNumber: number, headSha: string, leaseMs: number, now = Date.now()): boolean {
+    return this.claimAutomaticLease(owner, repo, pullNumber, headSha, leaseMs, now) !== undefined;
+  }
+
+  claimAutomaticLease(owner: string, repo: string, pullNumber: number, headSha: string, leaseMs: number, now = Date.now()): number | undefined {
     const headKey = `${owner}/${repo}#${pullNumber}@${headSha}`;
     this.#db.exec('BEGIN IMMEDIATE');
     try {
-      const existing = this.#db.prepare('SELECT status, lease_until FROM automatic_heads WHERE head_key = ?').get(headKey) as { status: string; lease_until: number } | undefined;
+      const existing = this.#db.prepare('SELECT status, lease_until, lease_generation FROM automatic_heads WHERE head_key = ?').get(headKey) as { status: string; lease_until: number; lease_generation: number } | undefined;
       if (existing?.status === 'completed' || existing?.status === 'merged' || (existing?.status === 'processing' && existing.lease_until > now) || (existing?.status === 'failed' && existing.lease_until > now)) {
         this.#db.exec('COMMIT');
-        return false;
+        return undefined;
       }
-      this.#db.prepare(`INSERT INTO automatic_heads (head_key, owner, repo, pull_number, head_sha, status, review_id, lease_until, updated_at)
-        VALUES (?, ?, ?, ?, ?, 'processing', NULL, ?, ?)
-        ON CONFLICT(head_key) DO UPDATE SET status = 'processing', lease_until = excluded.lease_until, updated_at = excluded.updated_at`).run(headKey, owner, repo, pullNumber, headSha, now + leaseMs, new Date(now).toISOString());
+      const leaseGeneration = (existing?.lease_generation ?? 0) + 1;
+      this.#db.prepare(`INSERT INTO automatic_heads (head_key, owner, repo, pull_number, head_sha, status, review_id, lease_until, lease_generation, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'processing', NULL, ?, ?, ?)
+        ON CONFLICT(head_key) DO UPDATE SET status = 'processing', lease_until = excluded.lease_until, lease_generation = ?, review_id = NULL, updated_at = excluded.updated_at`).run(headKey, owner, repo, pullNumber, headSha, now + leaseMs, leaseGeneration, new Date(now).toISOString(), leaseGeneration);
       this.#db.exec('COMMIT');
-      return true;
+      return leaseGeneration;
     } catch (error) {
       this.#db.exec('ROLLBACK');
       throw error;
     }
   }
 
-  completeAutomaticHead(owner: string, repo: string, pullNumber: number, headSha: string, status: 'completed' | 'failed', reviewId?: string, retryAfterMs = 900_000, now = Date.now()): void {
+  completeAutomaticHead(owner: string, repo: string, pullNumber: number, headSha: string, status: 'completed' | 'failed', reviewId?: string, retryAfterMs = 900_000, now = Date.now(), leaseGeneration?: number): void {
     const headKey = `${owner}/${repo}#${pullNumber}@${headSha}`;
-    this.#db.prepare('UPDATE automatic_heads SET status = ?, review_id = ?, lease_until = ?, updated_at = ? WHERE head_key = ?').run(status, reviewId ?? null, status === 'completed' ? Number.MAX_SAFE_INTEGER : now + retryAfterMs, new Date(now).toISOString(), headKey);
+    const query = leaseGeneration === undefined
+      ? 'UPDATE automatic_heads SET status = ?, review_id = ?, lease_until = ?, updated_at = ? WHERE head_key = ?'
+      : 'UPDATE automatic_heads SET status = ?, review_id = ?, lease_until = ?, updated_at = ? WHERE head_key = ? AND status = \'processing\' AND lease_generation = ?';
+    const params = [status, reviewId ?? null, status === 'completed' ? Number.MAX_SAFE_INTEGER : now + retryAfterMs, new Date(now).toISOString(), headKey, ...(leaseGeneration === undefined ? [] : [leaseGeneration])];
+    this.#db.prepare(query).run(...params);
+  }
+
+  automaticLeaseCurrent(owner: string, repo: string, pullNumber: number, headSha: string, leaseGeneration: number, now = Date.now()): boolean {
+    const headKey = `${owner}/${repo}#${pullNumber}@${headSha}`;
+    const row = this.#db.prepare('SELECT status, lease_until, lease_generation FROM automatic_heads WHERE head_key = ?').get(headKey) as { status: string; lease_until: number; lease_generation: number } | undefined;
+    return row?.status === 'processing' && row.lease_generation === leaseGeneration && row.lease_until > now;
   }
 
   getAutomaticHead(owner: string, repo: string, pullNumber: number, headSha: string): AutomaticHeadRecord | undefined {
     const headKey = `${owner}/${repo}#${pullNumber}@${headSha}`;
-    const row = this.#db.prepare('SELECT status, review_id, lease_until FROM automatic_heads WHERE head_key = ?').get(headKey) as { status: AutomaticHeadRecord['status']; review_id: string | null; lease_until: number } | undefined;
-    return row ? { status: row.status, reviewId: row.review_id ?? undefined, leaseUntil: row.lease_until } : undefined;
+    const row = this.#db.prepare('SELECT status, review_id, lease_until, lease_generation FROM automatic_heads WHERE head_key = ?').get(headKey) as { status: AutomaticHeadRecord['status']; review_id: string | null; lease_until: number; lease_generation: number } | undefined;
+    return row ? { status: row.status, reviewId: row.review_id ?? undefined, leaseUntil: row.lease_until, leaseGeneration: row.lease_generation } : undefined;
   }
 
   markAutomaticMerged(owner: string, repo: string, pullNumber: number, headSha: string): void {

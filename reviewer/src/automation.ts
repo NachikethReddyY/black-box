@@ -58,7 +58,8 @@ export class AutomaticReviewer {
         if (this.#config.automaticPullRequestNumber !== undefined && pullRequest.ref.number !== this.#config.automaticPullRequestNumber) continue;
         if (pullRequest.draft && !(this.#config.includeDrafts ?? false)) { skippedDrafts += 1; continue; }
         if (pullRequest.authorLogin !== repository.owner) continue;
-        if (!this.#store.claimAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 15 * 60_000)) {
+        const leaseGeneration = this.#store.claimAutomaticLease(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 15 * 60_000);
+        if (leaseGeneration === undefined) {
           skippedProcessed += 1;
           if (this.#config.autoMerge) {
             try {
@@ -72,19 +73,25 @@ export class AutomaticReviewer {
         }
         reviewed += 1;
         try {
+          const assertLease = (): void => {
+            if (!this.#store.automaticLeaseCurrent(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, leaseGeneration)) {
+              throw new Error('automatic review lease expired or was reclaimed');
+            }
+          };
           const snapshot = await this.#client.capturePullRequestSnapshot(pullRequest.ref);
           if (snapshot.headSha !== pullRequest.headSha) throw new Error(`PR head changed while snapshotting: listed ${pullRequest.headSha}, captured ${snapshot.headSha}`);
           const result = await this.#run(snapshot, this.#store);
           if (result.outcome === 'completed_clean' || result.outcome === 'completed_findings') {
             const files = await this.#client.listPullRequestFiles(pullRequest.ref);
             const payload = buildReviewPreview(result, changedRightLines(files), this.#config.maxInlineFindings);
+            assertLease();
             await this.#client.publishReview(pullRequest.ref, payload);
             this.#store.markPublication(result.reviewId, 'published');
             published += 1;
-            this.#store.completeAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 'completed', result.reviewId);
             let summaryReady = true;
             if (this.#config.updatePullRequestDescription) {
               try {
+                assertLease();
                 const pr = await this.#client.getPullRequest(pullRequest.ref);
                 if (pr.headSha !== pullRequest.headSha) throw new Error('PR head changed before description update');
                 await this.#client.updatePullRequestBody(pullRequest.ref, mergeSummaryBody(pr.body, result), pullRequest.headSha, sha256(pr.body ?? ''));
@@ -95,6 +102,8 @@ export class AutomaticReviewer {
                 console.error(JSON.stringify({ event: 'automatic_summary_failed', repository: `${pullRequest.ref.owner}/${pullRequest.ref.repo}`, pullRequest: pullRequest.ref.number, headSha: pullRequest.headSha, error: error instanceof Error ? error.message : 'unknown error' }));
               }
             }
+            assertLease();
+            this.#store.completeAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 'completed', result.reviewId, 900_000, Date.now(), leaseGeneration);
             if (this.#config.autoMerge && summaryReady && result.outcome === 'completed_clean') {
               try {
                 if (await this.tryMerge(pullRequest)) merged += 1; else waitingForCi += 1;
@@ -105,11 +114,11 @@ export class AutomaticReviewer {
             }
           } else {
             this.#store.markPublication(result.reviewId, 'not_published');
-            this.#store.completeAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 'failed', result.reviewId);
+            this.#store.completeAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 'failed', result.reviewId, 900_000, Date.now(), leaseGeneration);
           }
         } catch (error) {
           failed += 1;
-          this.#store.completeAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 'failed');
+          this.#store.completeAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 'failed', undefined, 900_000, Date.now(), leaseGeneration);
           console.error(JSON.stringify({ event: 'automatic_review_failed', repository: `${pullRequest.ref.owner}/${pullRequest.ref.repo}`, pullRequest: pullRequest.ref.number, headSha: pullRequest.headSha, error: error instanceof Error ? error.message : 'unknown error' }));
         }
       }
