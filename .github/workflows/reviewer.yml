@@ -6,16 +6,15 @@ on:
       - 'reviewer/**'
       - '.github/workflows/reviewer.yml'
       - '.github/workflows/ai-reviewer.yml'
-  # The base-branch workflow is trusted; the PR commit is tested on an
-  # ephemeral GitHub-hosted runner without reviewer credentials.
-  pull_request_target:
+  # PR code is tested on an ephemeral GitHub-hosted runner without reviewer
+  # credentials. Never execute PR-controlled code in a target-workflow context.
+  pull_request:
     paths:
       - 'reviewer/**'
       - '.github/workflows/reviewer.yml'
       - '.github/workflows/ai-reviewer.yml'
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   reviewer:

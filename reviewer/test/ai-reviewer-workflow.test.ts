@@ -36,9 +36,10 @@ test('AI reviewer workflow is event-scoped, trusted, and fork-isolated', () => {
 test('AI reviewer workflow keeps the existing reviewer CI workflow separate', () => {
   const existingWorkflow = readFileSync(resolve(repositoryRoot, '.github/workflows/reviewer.yml'), 'utf8');
   assert.match(existingWorkflow, /name: Reviewer/);
-  assert.match(existingWorkflow, /pull_request_target:/);
+  assert.match(existingWorkflow, /pull_request:/);
   assert.match(existingWorkflow, /runs-on: ubuntu-latest/);
   assert.match(existingWorkflow, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/);
   assert.match(existingWorkflow, /\.github\/workflows\/ai-reviewer\.yml/);
   assert.match(existingWorkflow, /pnpm test/);
+  assert.match(existingWorkflow, /permissions: \{\}/);
 });
