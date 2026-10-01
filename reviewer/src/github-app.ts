@@ -69,7 +69,7 @@ function readProtectedPrivateKey(path: string): string {
 
 export async function createConfiguredGitHubInstallationToken(config: ReviewConfig, fetcher: typeof fetch = fetch): Promise<GitHubAppTokenResponse> {
   const credentials = githubAppCredentials(config);
-  if (!credentials) throw new Error('pr-review requires GitHub App credentials; set GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and GITHUB_APP_PRIVATE_KEY_FILE. Personal GITHUB_TOKEN is not accepted for publication.');
+  if (!credentials) throw new Error('pr-review requires GitHub App credentials; set GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and GITHUB_APP_PRIVATE_KEY_FILE or GITHUB_APP_PRIVATE_KEY. Personal GITHUB_TOKEN is not accepted for publication.');
   return createGitHubInstallationToken(credentials, fetcher);
 }
 
