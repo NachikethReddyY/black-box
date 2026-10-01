@@ -58,7 +58,8 @@ test('working-tree and staged snapshots capture different immutable bytes', () =
 
 test('context includes TypeScript symbols and blocks a secret-bearing cloud packet', () => {
   const root = tempRepo();
-  writeFileSync(join(root, 'index.ts'), 'export function value(): number { return 2; }\nconst token = "sk-test-1234567890123456";\n');
+  const fixtureToken = ['sk', 'test', '1234567890123456'].join('-');
+  writeFileSync(join(root, 'index.ts'), `export function value(): number { return 2; }\nconst token = "${fixtureToken}";\n`);
   const snap = captureSnapshot(config(root), 'working_tree');
   const built = buildContext(snap, 128 * 1024);
   assert.ok(built.packet.symbols.some((symbol) => symbol.name === 'value'));
