@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { id, sha256 } from './hash.js';
 import type { Candidate, ContextPacket, FindingOccurrence, ProviderAdapter, ProviderRequest, ProviderResponse, ReviewConfig, ReviewId, ReviewResult, Snapshot, Verification } from './types.js';
 import { ReviewStore } from './store.js';
@@ -9,7 +10,7 @@ export interface RunOptions {
 }
 
 export async function runReview(config: ReviewConfig, snapshot: Snapshot, packet: ContextPacket, store: ReviewStore, options: RunOptions = {}): Promise<ReviewResult> {
-  const reviewId = (options.reviewId ?? id('review', `${snapshot.id}:${config.profile}`)) as ReviewId;
+  const reviewId = (options.reviewId ?? id('review', `${snapshot.id}:${config.profile}:${randomUUID()}`)) as ReviewId;
   const base = { reviewId, snapshot, profile: config.profile, candidates: [], verifications: [], findings: [], secretFindings: packet.secretFindings, deterministicSecurityCheck: { secretScanCompleted: true, findings: packet.secretFindings.length }, coverage: { selectedPaths: packet.files.map((file) => file.path), omittedPaths: packet.omittedPaths, complete: packet.omittedPaths.length === 0 }, attempts: 0, estimatedCostUsd: 0 };
   if (config.profile === 'static_only') {
     const result = { ...base, outcome: packet.secretFindings.length > 0 ? 'completed_findings' as const : 'completed_clean' as const };

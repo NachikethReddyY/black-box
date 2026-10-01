@@ -108,6 +108,9 @@ test('static review persists an exact result and publication preview without a m
   assert.equal(result.outcome, 'completed_clean');
   assert.equal(result.attempts, 0);
   assert.ok(store.getReview(result.reviewId));
+  const second = await runReview(cfg, snap, built.packet, store);
+  assert.notEqual(second.reviewId, result.reviewId);
+  assert.equal(store.listReviews().length, 2);
   assert.match(reportMarkdown(result), /Outcome: \*\*completed_clean\*\*/);
   store.close();
 });
