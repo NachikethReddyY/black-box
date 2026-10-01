@@ -1,0 +1,71 @@
+name: AI pull request reviewer
+
+on:
+  # The base-branch workflow is trusted; the job below still rejects fork heads.
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-reviewer-${{ github.event.repository.full_name }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Fork PRs never reach this self-hosted, secret-bearing job.
+    if: >-
+      github.event.repository.full_name == github.repository &&
+      github.event.pull_request.base.repo.full_name == github.repository &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, black-box-reviewer]
+    timeout-minutes: 30
+    env:
+      REVIEWER_PROFILE: economy_cloud_tokenrouter_luna_v1
+      REVIEWER_ROOT: ${{ github.workspace }}
+      REVIEWER_DATA_DIR: ${{ runner.temp }}/black-box-reviewer-data
+      REVIEWER_CLOUD_BUDGET_USD: '0.10'
+      REVIEWER_UPDATE_PR_DESCRIPTION: 'true'
+      REVIEWER_AUTO_MERGE: 'false'
+      LUNA_API_KEY: ${{ secrets.LUNA_API_KEY }}
+      TOKENROUTER_API_KEY: ${{ secrets.TOKENROUTER_API_KEY }}
+      GITHUB_APP_ID: ${{ secrets.GITHUB_APP_ID }}
+      GITHUB_APP_INSTALLATION_ID: ${{ secrets.GITHUB_APP_INSTALLATION_ID }}
+      GITHUB_APP_PRIVATE_KEY_FILE: ${{ runner.temp }}/black-box-reviewer-app.pem
+      REVIEWER_REPOSITORY: ${{ github.event.repository.full_name }}
+      REVIEWER_PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # Run only reviewer code from the trusted base revision. The PR is read through GitHub's API.
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d # v4.1.0
+        with:
+          version: 11
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: reviewer/pnpm-lock.yaml
+      - name: Install reviewer dependencies
+        run: pnpm --dir reviewer install --frozen-lockfile --ignore-scripts
+      - name: Materialize GitHub App key
+        env:
+          APP_PRIVATE_KEY: ${{ secrets.GITHUB_APP_PRIVATE_KEY }}
+        run: |
+          umask 077
+          printf '%s' "$APP_PRIVATE_KEY" > "$GITHUB_APP_PRIVATE_KEY_FILE"
+      - name: Review pull request
+        run: |
+          repository_owner="${REVIEWER_REPOSITORY%%/*}"
+          repository_name="${REVIEWER_REPOSITORY#*/}"
+          pnpm --dir reviewer run pr-review -- "$repository_owner" "$repository_name" "$REVIEWER_PR_NUMBER"
+      - name: Remove GitHub App key
+        if: ${{ always() }}
+        run: rm -f -- "$GITHUB_APP_PRIVATE_KEY_FILE"
