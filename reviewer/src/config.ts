@@ -39,6 +39,8 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env, cwd = proces
   if (pollIntervalMs < 15_000) throw new Error('REVIEWER_POLL_INTERVAL_SECONDS must be at least 15');
   const maxAutomaticReviewsPerPoll = integer(env.REVIEWER_MAX_AUTOMATIC_REVIEWS_PER_POLL, 1);
   if (maxAutomaticReviewsPerPoll < 1 || maxAutomaticReviewsPerPoll > 10) throw new Error('REVIEWER_MAX_AUTOMATIC_REVIEWS_PER_POLL must be between 1 and 10');
+  const automaticPullRequestNumber = env.REVIEWER_PR_NUMBER === undefined ? undefined : integer(env.REVIEWER_PR_NUMBER, 0);
+  if (automaticPullRequestNumber !== undefined && automaticPullRequestNumber < 1) throw new Error('REVIEWER_PR_NUMBER must be a positive integer');
   return {
     root, dataDir, profile, maxAttempts,
     // The reviewer sends a bounded whole-change packet so large PRs do not
@@ -61,7 +63,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env, cwd = proces
     githubRepositories,
     pollIntervalMs,
     includeDrafts: env.REVIEWER_INCLUDE_DRAFTS === 'true',
-    maxAutomaticReviewsPerPoll,
+    maxAutomaticReviewsPerPoll, automaticPullRequestNumber,
     updatePullRequestDescription: env.REVIEWER_UPDATE_PR_DESCRIPTION === 'true',
     autoMerge: env.REVIEWER_AUTO_MERGE === 'true',
   };

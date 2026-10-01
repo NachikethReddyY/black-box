@@ -44,6 +44,7 @@ jobs:
       REVIEWER_UPDATE_PR_DESCRIPTION: 'true'
       REVIEWER_AUTO_MERGE: 'true'
       REVIEWER_REPOSITORY: ${{ github.event.repository.full_name }}
+      REVIEWER_GITHUB_REPOSITORIES: ${{ github.event.repository.full_name }}
       REVIEWER_PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -61,7 +62,7 @@ jobs:
           cache-dependency-path: reviewer/pnpm-lock.yaml
       - name: Install reviewer dependencies
         run: pnpm --dir reviewer install --frozen-lockfile --ignore-scripts
-      - name: Review pull request
+      - name: Review and merge eligible pull request
         env:
           LUNA_API_KEY: ${{ secrets.LUNA_API_KEY }}
           TOKENROUTER_API_KEY: ${{ secrets.TOKENROUTER_API_KEY }}
@@ -69,6 +70,4 @@ jobs:
           GITHUB_APP_INSTALLATION_ID: ${{ secrets.BB_GITHUB_APP_INSTALLATION_ID }}
           GITHUB_APP_PRIVATE_KEY: ${{ secrets.BB_GITHUB_APP_PRIVATE_KEY }}
         run: |
-          repository_owner="${REVIEWER_REPOSITORY%%/*}"
-          repository_name="${REVIEWER_REPOSITORY#*/}"
-          pnpm --dir reviewer run pr-review -- "$repository_owner" "$repository_name" "$REVIEWER_PR_NUMBER"
+          pnpm --dir reviewer run poll-once

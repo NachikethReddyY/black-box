@@ -38,6 +38,7 @@ test('automatic polling configuration is explicit and safe by default', () => {
   assert.equal(cfg.maxAutomaticReviewsPerPoll, 1);
   assert.equal(cfg.maxInputTokens, 131_072);
   assert.equal(cfg.maxPacketBytes, 600 * 1024);
+  assert.equal(configFromEnv({ REVIEWER_PR_NUMBER: '7' }, '/tmp').automaticPullRequestNumber, 7);
   assert.throws(() => configFromEnv({ REVIEWER_GITHUB_REPOSITORIES: 'owner/repo/extra' }, '/tmp'), /invalid/);
   assert.throws(() => configFromEnv({ REVIEWER_POLL_INTERVAL_SECONDS: '10' }, '/tmp'), /at least 15/);
   assert.throws(() => configFromEnv({ LUNA_API_KEY: 'router-key', REVIEWER_MAX_ATTEMPTS: '2' }, '/tmp'), /at least three attempts/);
@@ -427,6 +428,19 @@ test('GitHub adapter lists open PR heads and draft state for automatic polling',
     { ref: { owner: 'owner', repo: 'repo', number: 3 }, headSha: 'head-3', draft: false, title: 'Ready', authorLogin: 'owner' },
     { ref: { owner: 'owner', repo: 'repo', number: 4 }, headSha: 'head-4', draft: true, title: 'Draft', authorLogin: 'owner' },
   ]);
+});
+
+test('GitHub adapter requires every completed check to conclude success', async () => {
+  const fetcher: typeof fetch = async (input) => {
+    const url = String(input);
+    if (url.includes('/check-runs')) return new Response(JSON.stringify({ check_runs: [{ name: 'build', status: 'completed', conclusion: 'success' }, { name: 'lint', status: 'completed', conclusion: 'neutral' }] }), { status: 200 });
+    if (url.includes('/status')) return new Response(JSON.stringify({ statuses: [] }), { status: 200 });
+    throw new Error(`unexpected request ${url}`);
+  };
+  const api = new GitHubApi('app-token', fetcher, 'https://github.test');
+  const status = await api.getCiStatus({ owner: 'owner', repo: 'repo', number: 1 }, 'head');
+  assert.equal(status.ready, false);
+  assert.equal(status.failed, true);
 });
 
 test('GitHub publisher posts one COMMENT review with only changed-line anchors', async () => {

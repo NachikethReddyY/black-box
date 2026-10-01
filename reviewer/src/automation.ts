@@ -54,6 +54,7 @@ export class AutomaticReviewer {
       discovered += pullRequests.length;
       for (const pullRequest of pullRequests) {
         if (reviewed >= limit) break;
+        if (this.#config.automaticPullRequestNumber !== undefined && pullRequest.ref.number !== this.#config.automaticPullRequestNumber) continue;
         if (pullRequest.draft && !(this.#config.includeDrafts ?? false)) { skippedDrafts += 1; continue; }
         if (pullRequest.authorLogin !== repository.owner) continue;
         if (!this.#store.claimAutomaticHead(pullRequest.ref.owner, pullRequest.ref.repo, pullRequest.ref.number, pullRequest.headSha, 15 * 60_000)) {

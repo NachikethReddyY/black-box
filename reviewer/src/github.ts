@@ -106,7 +106,7 @@ export class GitHubApi implements GitHubClient {
     const checks = record(checksValue); const checkRuns = Array.isArray(checks.check_runs) ? checks.check_runs : [];
     const status = record(statusValue); const statuses = Array.isArray(status.statuses) ? status.statuses : [];
     const details: string[] = []; let pending = false; let failed = false;
-    for (const value of checkRuns) { const row = record(value); const name = string(row.name); const conclusion = row.conclusion === null ? null : string(row.conclusion); details.push(`${name}:${conclusion ?? 'pending'}`); if (conclusion === null || row.status !== 'completed') pending = true; else if (!['success', 'neutral', 'skipped'].includes(conclusion)) failed = true; }
+    for (const value of checkRuns) { const row = record(value); const name = string(row.name); const conclusion = row.conclusion === null ? null : string(row.conclusion); details.push(`${name}:${conclusion ?? 'pending'}`); if (conclusion === null || row.status !== 'completed') pending = true; else if (conclusion !== 'success') failed = true; }
     for (const value of statuses) { const row = record(value); const context = string(row.context); const state = string(row.state); details.push(`${context}:${state}`); if (state === 'pending') pending = true; else if (state !== 'success') failed = true; }
     const count = checkRuns.length + statuses.length;
     return { ready: count > 0 && !pending && !failed, pending, failed, count, details };

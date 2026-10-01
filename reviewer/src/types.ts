@@ -188,6 +188,7 @@ export interface ReviewConfig {
   readonly pollIntervalMs?: number;
   readonly includeDrafts?: boolean;
   readonly maxAutomaticReviewsPerPoll?: number;
+  readonly automaticPullRequestNumber?: number;
   readonly updatePullRequestDescription?: boolean;
   readonly autoMerge?: boolean;
 }
