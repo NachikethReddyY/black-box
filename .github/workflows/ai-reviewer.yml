@@ -1,8 +1,10 @@
 name: AI pull request reviewer
 
 on:
-  # Same-repository PRs only. Forks are rejected before the secret-bearing job.
-  pull_request:
+  # The base-branch workflow is trusted. Forks and collaborator PRs are
+  # rejected before the secret-bearing job, and the PR archive is read through
+  # GitHub's API rather than checked out into the job.
+  pull_request_target:
     types:
       - opened
       - synchronize
@@ -14,7 +16,10 @@ permissions:
 
 concurrency:
   group: ai-reviewer-${{ github.event.repository.full_name }}-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  # Let an in-flight provider or publication request reconcile before a newer
+  # head runs. Exact-head checks keep an older result from applying to a newer
+  # revision.
+  cancel-in-progress: false
 
 jobs:
   review:
