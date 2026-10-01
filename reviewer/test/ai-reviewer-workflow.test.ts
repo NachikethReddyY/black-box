@@ -39,5 +39,6 @@ test('AI reviewer workflow keeps the existing reviewer CI workflow separate', ()
   assert.match(existingWorkflow, /pull_request_target:/);
   assert.match(existingWorkflow, /runs-on: ubuntu-latest/);
   assert.match(existingWorkflow, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/);
+  assert.match(existingWorkflow, /\.github\/workflows\/ai-reviewer\.yml/);
   assert.match(existingWorkflow, /pnpm test/);
 });
