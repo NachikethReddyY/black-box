@@ -34,8 +34,8 @@ jobs:
       REVIEWER_AUTO_MERGE: 'false'
       LUNA_API_KEY: ${{ secrets.LUNA_API_KEY }}
       TOKENROUTER_API_KEY: ${{ secrets.TOKENROUTER_API_KEY }}
-      GITHUB_APP_ID: ${{ secrets.GITHUB_APP_ID }}
-      GITHUB_APP_INSTALLATION_ID: ${{ secrets.GITHUB_APP_INSTALLATION_ID }}
+      GITHUB_APP_ID: ${{ secrets.BB_GITHUB_APP_ID }}
+      GITHUB_APP_INSTALLATION_ID: ${{ secrets.BB_GITHUB_APP_INSTALLATION_ID }}
       GITHUB_APP_PRIVATE_KEY_FILE: ${{ runner.temp }}/black-box-reviewer-app.pem
       REVIEWER_REPOSITORY: ${{ github.event.repository.full_name }}
       REVIEWER_PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -57,7 +57,7 @@ jobs:
         run: pnpm --dir reviewer install --frozen-lockfile --ignore-scripts
       - name: Materialize GitHub App key
         env:
-          APP_PRIVATE_KEY: ${{ secrets.GITHUB_APP_PRIVATE_KEY }}
+          APP_PRIVATE_KEY: ${{ secrets.BB_GITHUB_APP_PRIVATE_KEY }}
         run: |
           umask 077
           printf '%s' "$APP_PRIVATE_KEY" > "$GITHUB_APP_PRIVATE_KEY_FILE"

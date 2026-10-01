@@ -94,9 +94,9 @@ In the repository's **Settings → Secrets and variables → Actions**, add thes
 
 ```text
 LUNA_API_KEY              # or TOKENROUTER_API_KEY, from TokenRouter
-GITHUB_APP_ID
-GITHUB_APP_INSTALLATION_ID
-GITHUB_APP_PRIVATE_KEY   # PEM contents for BB CoPilot Bot
+BB_GITHUB_APP_ID
+BB_GITHUB_APP_INSTALLATION_ID
+BB_GITHUB_APP_PRIVATE_KEY   # PEM contents for BB CoPilot Bot
 ```
 
 The workflow uses the TokenRouter base URL `https://api.tokenrouter.com/v1`, the configured Luna model route, a `$0.10` per-PR ceiling, and updates only the Black Box marker block in the PR description. Do not add `GITHUB_TOKEN` as a publication credential. The reviewer publishes with the installed GitHub App identity.
