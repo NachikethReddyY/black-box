@@ -23,11 +23,14 @@ concurrency:
 
 jobs:
   review:
-    # Fork PRs never reach this self-hosted, secret-bearing job.
+    # This secret-bearing automatic path is intentionally limited to personal
+    # repositories and PRs authored by that personal account. Organization
+    # support needs an explicit maintainer allowlist before enabling it.
     if: >-
       github.event.repository.full_name == github.repository &&
       github.event.pull_request.base.repo.full_name == github.repository &&
       github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.repository.owner.type == 'User' &&
       github.event.pull_request.user.login == github.repository_owner
     runs-on: [self-hosted, linux, black-box-reviewer]
     timeout-minutes: 30
@@ -38,11 +41,6 @@ jobs:
       REVIEWER_CLOUD_BUDGET_USD: '0.10'
       REVIEWER_UPDATE_PR_DESCRIPTION: 'true'
       REVIEWER_AUTO_MERGE: 'false'
-      LUNA_API_KEY: ${{ secrets.LUNA_API_KEY }}
-      TOKENROUTER_API_KEY: ${{ secrets.TOKENROUTER_API_KEY }}
-      GITHUB_APP_ID: ${{ secrets.BB_GITHUB_APP_ID }}
-      GITHUB_APP_INSTALLATION_ID: ${{ secrets.BB_GITHUB_APP_INSTALLATION_ID }}
-      GITHUB_APP_PRIVATE_KEY: ${{ secrets.BB_GITHUB_APP_PRIVATE_KEY }}
       REVIEWER_REPOSITORY: ${{ github.event.repository.full_name }}
       REVIEWER_PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
@@ -62,6 +60,12 @@ jobs:
       - name: Install reviewer dependencies
         run: pnpm --dir reviewer install --frozen-lockfile --ignore-scripts
       - name: Review pull request
+        env:
+          LUNA_API_KEY: ${{ secrets.LUNA_API_KEY }}
+          TOKENROUTER_API_KEY: ${{ secrets.TOKENROUTER_API_KEY }}
+          GITHUB_APP_ID: ${{ secrets.BB_GITHUB_APP_ID }}
+          GITHUB_APP_INSTALLATION_ID: ${{ secrets.BB_GITHUB_APP_INSTALLATION_ID }}
+          GITHUB_APP_PRIVATE_KEY: ${{ secrets.BB_GITHUB_APP_PRIVATE_KEY }}
         run: |
           repository_owner="${REVIEWER_REPOSITORY%%/*}"
           repository_name="${REVIEWER_REPOSITORY#*/}"
