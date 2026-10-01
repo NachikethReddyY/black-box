@@ -36,6 +36,8 @@ test('automatic polling configuration is explicit and safe by default', () => {
   assert.equal(cfg.pollIntervalMs, 30_000);
   assert.equal(cfg.includeDrafts, true);
   assert.equal(cfg.maxAutomaticReviewsPerPoll, 1);
+  assert.equal(cfg.maxInputTokens, 131_072);
+  assert.equal(cfg.maxPacketBytes, 600 * 1024);
   assert.throws(() => configFromEnv({ REVIEWER_GITHUB_REPOSITORIES: 'owner/repo/extra' }, '/tmp'), /invalid/);
   assert.throws(() => configFromEnv({ REVIEWER_POLL_INTERVAL_SECONDS: '10' }, '/tmp'), /at least 15/);
 });

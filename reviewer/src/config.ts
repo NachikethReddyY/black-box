@@ -40,9 +40,12 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env, cwd = proces
   if (maxAutomaticReviewsPerPoll < 1 || maxAutomaticReviewsPerPoll > 10) throw new Error('REVIEWER_MAX_AUTOMATIC_REVIEWS_PER_POLL must be between 1 and 10');
   return {
     root, dataDir, profile, maxAttempts,
-    maxInputTokens: integer(env.REVIEWER_MAX_INPUT_TOKENS, 32_768),
+    // The reviewer sends a bounded whole-change packet so large PRs do not
+    // silently become partial reviews. Four reserved attempts remain below
+    // the application's $0.10 per-PR cloud cap at the configured route.
+    maxInputTokens: integer(env.REVIEWER_MAX_INPUT_TOKENS, 131_072),
     maxOutputTokens: integer(env.REVIEWER_MAX_OUTPUT_TOKENS, 4_096),
-    maxPacketBytes: integer(env.REVIEWER_MAX_PACKET_BYTES, 128 * 1024),
+    maxPacketBytes: integer(env.REVIEWER_MAX_PACKET_BYTES, 600 * 1024),
     maxInlineFindings: integer(env.REVIEWER_MAX_INLINE_FINDINGS, 5),
     cloudBudgetUsd,
     openAiApiKey: env.OPENAI_API_KEY?.trim() || undefined,

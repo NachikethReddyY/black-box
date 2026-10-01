@@ -1,6 +1,6 @@
 # Black Box reviewer
 
-The reviewer is a TypeScript service for evidence-backed pull-request review. Automatic PR reviews run on an Ubuntu GitHub Actions self-hosted runner labeled `black-box-reviewer`; GitHub connects over the runner's outbound HTTPS session. A Windows PC inside WSL2 remains a local fallback. Keep SQLite, snapshots, and reports on the Linux filesystem.
+The reviewer is a TypeScript service for evidence-backed pull-request review. Automatic PR reviews run on an Ubuntu GitHub Actions self-hosted runner labeled `black-box-reviewer`; GitHub connects over the runner's outbound HTTPS session. A Windows PC inside WSL2 remains a local fallback. Keep SQLite, snapshots, and reports on the Linux filesystem. The default evidence packet is bounded at 600 KiB and the input reservation at 131,072 tokens so large changes can remain complete without bypassing the per-PR budget cap.
 
 ## Commands
 
