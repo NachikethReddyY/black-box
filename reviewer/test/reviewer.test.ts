@@ -70,6 +70,30 @@ test('context includes TypeScript symbols and blocks a secret-bearing cloud pack
   });
 });
 
+test('coverage tracks changed files instead of unrelated repository context', () => {
+  const root = tempRepo();
+  writeFileSync(join(root, 'changed.ts'), 'export const changed = 1;\n');
+  writeFileSync(join(root, 'unchanged.ts'), 'export const unchanged = 1;\n');
+  run(root, ['add', 'changed.ts', 'unchanged.ts']);
+  run(root, ['commit', '-m', 'fixture']);
+  writeFileSync(join(root, 'changed.ts'), 'export const changed = 2;\n');
+
+  const snapshot = captureSnapshot(config(root), 'working_tree');
+  const { packet } = buildContext(snapshot, 128 * 1024);
+
+  assert.deepEqual(snapshot.changedPaths, ['changed.ts']);
+  assert.deepEqual(packet.omittedPaths, []);
+  assert.deepEqual(packet.files.map((file) => file.path), ['changed.ts']);
+
+  const store = new ReviewStore(config(root));
+  return runReview(config(root), snapshot, packet, store).then((result) => {
+    assert.equal(result.coverage.complete, true);
+    assert.deepEqual(result.coverage.selectedPaths, ['changed.ts']);
+    assert.deepEqual(result.coverage.omittedPaths, []);
+    store.close();
+  });
+});
+
 test('static review persists an exact result and publication preview without a model call', async () => {
   const root = tempRepo();
   const cfg = config(root);

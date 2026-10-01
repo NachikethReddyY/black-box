@@ -58,7 +58,11 @@ function parseSymbols(file: SourceFile): SymbolRecord[] {
 
 function makePacket(files: readonly SourceFile[], symbols: readonly SymbolRecord[], evidence: readonly EvidenceRef[], findings: ContextPacket['secretFindings'], snapshot: Snapshot): ContextPacket {
   const selected = new Set(files.map((file) => file.path));
-  const omittedPaths = [...new Set([...snapshot.omittedPaths, ...snapshot.files.filter((file) => !selected.has(file.path)).map((file) => file.path)])].sort();
+  const changed = new Set(snapshot.changedPaths);
+  const omittedPaths = [...new Set([
+    ...snapshot.omittedPaths.filter((path) => changed.has(path)),
+    ...snapshot.changedPaths.filter((path) => !selected.has(path)),
+  ])].sort();
   return { files, symbols, evidence, secretFindings: findings, omittedPaths, snapshotId: snapshot.id };
 }
 
