@@ -22,6 +22,7 @@ test('AI reviewer workflow is event-scoped, trusted, and fork-isolated', () => {
   assert.match(workflow, /REVIEWER_UPDATE_PR_DESCRIPTION: 'true'/);
   assert.equal((workflow.match(/pnpm --dir reviewer run pr-review/g) ?? []).length, 1);
   assert.match(workflow, /github\.event\.repository\.owner\.type == 'User'/);
+  assert.match(workflow, /github\.event\.pull_request\.draft == false/);
   assert.doesNotMatch(workflow, /^\s+GITHUB_TOKEN:/m);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, /- name: Review pull request[\s\S]*env:[\s\S]*GITHUB_APP_PRIVATE_KEY:/);
