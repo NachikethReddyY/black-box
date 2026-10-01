@@ -160,7 +160,14 @@ export class GitHubApi implements GitHubClient {
     const response = await this.#fetch(`${this.#apiBase}${path}`, { ...init, headers: { accept: 'application/vnd.github+json', ...(this.#token ? { authorization: `Bearer ${this.#token}` } : {}), 'x-github-api-version': '2022-11-28', 'user-agent': 'Black-Box-Reviewer', ...(init.headers ?? {}) }, signal: init.signal ?? AbortSignal.timeout(30_000) });
     const text = await response.text();
     const value: unknown = text ? JSON.parse(text) : undefined;
-    if (!response.ok) throw new Error(`GitHub API returned HTTP ${response.status}`);
+    if (!response.ok) {
+      let detail = '';
+      try {
+        const parsed = JSON.parse(text) as { message?: unknown };
+        detail = typeof parsed.message === 'string' ? `: ${parsed.message}` : '';
+      } catch { /* preserve the status when GitHub returns a non-JSON error */ }
+      throw new Error(`GitHub API returned HTTP ${response.status}${detail}`);
+    }
     return { value, headers: response.headers };
   }
 }
