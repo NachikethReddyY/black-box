@@ -8,7 +8,7 @@ CONFIG_FILE="${BLACK_BOX_RUNNER_CONFIG:-${RUNNER_DIR}/runner.env}"
 
 RUNNER_INSTALL_DIR="${RUNNER_INSTALL_DIR:-${HOME}/actions-runner}"
 RUNNER_DATA_DIR="${RUNNER_DATA_DIR:-${HOME}/.local/share/black-box-runner}"
-RUNNER_LABEL="${RUNNER_LABEL:-black-box-linux}"
+RUNNER_LABEL="${RUNNER_LABEL:-black-box-reviewer}"
 RUNNER_REQUIRE_DOCKER="${RUNNER_REQUIRE_DOCKER:-true}"
 RUNNER_DOCKER_OWNER_LABEL="${RUNNER_DOCKER_OWNER_LABEL:-com.blackbox.runner.owner=black-box-ci}"
 if [[ -f "$CONFIG_FILE" ]]; then
@@ -45,7 +45,7 @@ reject_symlink_components_inside_home() {
 
 validate_config() {
   local path
-  [[ "$RUNNER_LABEL" == black-box-linux ]] || fail "RUNNER_LABEL must be black-box-linux"
+  [[ "$RUNNER_LABEL" == black-box-reviewer ]] || fail "RUNNER_LABEL must be black-box-reviewer"
   [[ "$RUNNER_REQUIRE_DOCKER" == true || "$RUNNER_REQUIRE_DOCKER" == false ]] || fail "RUNNER_REQUIRE_DOCKER must be true or false"
   [[ "$RUNNER_DOCKER_OWNER_LABEL" == com.blackbox.runner.owner=black-box-ci ]] || fail "RUNNER_DOCKER_OWNER_LABEL must be com.blackbox.runner.owner=black-box-ci"
   [[ "$HOME" == /* && "$HOME" != / ]] || fail "HOME must be an absolute non-root path"
@@ -60,7 +60,7 @@ validate_config() {
   [[ "$RUNNER_INSTALL_DIR" != "$RUNNER_DATA_DIR"/* && "$RUNNER_DATA_DIR" != "$RUNNER_INSTALL_DIR"/* ]] || fail "install and data paths must not overlap"
 }
 
-require_linux() { [[ "${BLACK_BOX_RUNNER_TEST_MODE:-false}" == true ]] || is_linux || fail "this command requires Linux inside WSL2"; }
+require_linux() { [[ "${BLACK_BOX_RUNNER_TEST_MODE:-false}" == true ]] || is_linux || fail "this command requires Linux"; }
 require_owned_data() {
   [[ -f "$OWNER_FILE" && ! -L "$OWNER_FILE" ]] || fail "runner data is not initialized; run scripts/setup-paths.sh"
   [[ "$(cat -- "$OWNER_FILE")" == black-box-runner-v0.1 ]] || fail "runner data ownership marker is invalid"

@@ -6,22 +6,30 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib.sh"
 require_linux
 validate_config
-[[ "$(uname -m)" == x86_64 ]] || fail 'v0.1 installer expects Linux x86_64'
+machine="$(uname -m)"
+case "$machine" in
+  x86_64) node_arch=x64; runner_arch=x64 ;;
+  aarch64|arm64) node_arch=arm64; runner_arch=arm64 ;;
+  *) fail "unsupported Linux architecture: $machine" ;;
+esac
 command -v curl >/dev/null || fail 'curl is required'
 command -v sha256sum >/dev/null || fail 'sha256sum is required'
 command -v tar >/dev/null || fail 'tar is required'
 node_version=24.20.0
 pnpm_version=12.6.0
 runner_version=2.337.0
-runner_sha=70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613
+case "$runner_arch" in
+  x64) runner_sha=70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613 ;;
+  arm64) runner_sha=9b1dc70626422526e3c94767cf024896beb15da5342a3f4819bf2feac13e0393 ;;
+esac
 tool_root="${HOME}/.local/share/black-box-tools"
-node_dir="${tool_root}/node-v${node_version}-linux-x64"
+node_dir="${tool_root}/node-v${node_version}-linux-${node_arch}"
 mkdir -p -- "$tool_root" "${HOME}/.local/bin"
 reject_symlink_components_inside_home "$tool_root"
 stage="$(mktemp -d "${tool_root}/download.XXXXXX")"
 trap 'rm -rf -- "$stage"' EXIT
 if [[ ! -x "$node_dir/bin/node" ]]; then
-  name="node-v${node_version}-linux-x64.tar.xz"
+  name="node-v${node_version}-linux-${node_arch}.tar.xz"
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 "https://nodejs.org/dist/v${node_version}/${name}" -o "${stage}/${name}"
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 "https://nodejs.org/dist/v${node_version}/SHASUMS256.txt" -o "${stage}/SHASUMS256.txt"
   awk -v filename="$name" '$2 == filename {print}' "${stage}/SHASUMS256.txt" >"${stage}/node.sha256"
@@ -59,7 +67,7 @@ for binary in pnpm pnpx; do
 done
 if [[ ! -x "${RUNNER_INSTALL_DIR}/bin/Runner.Listener" ]]; then
   [[ ! -e "$RUNNER_INSTALL_DIR" || -z "$(ls -A "$RUNNER_INSTALL_DIR")" ]] || fail 'runner installation directory is not empty'
-  name="actions-runner-linux-x64-${runner_version}.tar.gz"
+  name="actions-runner-linux-${runner_arch}-${runner_version}.tar.gz"
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 "https://github.com/actions/runner/releases/download/v${runner_version}/${name}" -o "${stage}/${name}"
   printf '%s  %s\n' "$runner_sha" "$name" >"${stage}/runner.sha256"
   (cd "$stage" && sha256sum --check runner.sha256)
