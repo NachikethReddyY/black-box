@@ -46,7 +46,7 @@ export function assessMergeability(result: ReviewResult): MergeabilityAssessment
   return { score, label, reasons };
 }
 
-export function buildReviewPreview(result: ReviewResult, changedLines?: ReadonlyMap<string, ReadonlySet<number>>): ReviewPreview {
+export function buildReviewPreview(result: ReviewResult, changedLines?: ReadonlyMap<string, ReadonlySet<number>>, maxInlineFindings = 5): ReviewPreview {
   const head = result.snapshot.headSha;
   if (!head) throw new Error('local working-tree and staged reviews cannot produce GitHub anchors');
   const comments = result.findings.flatMap((finding) => {
@@ -55,7 +55,7 @@ export function buildReviewPreview(result: ReviewResult, changedLines?: Readonly
     const allowedLines = changedLines?.get(ref.path);
     if (allowedLines && !allowedLines.has(ref.start)) return [];
     return [{ path: ref.path, line: ref.start, side: ref.side, body: commentBody(finding) }];
-  });
+  }).slice(0, maxInlineFindings);
   return { commit_id: head, event: 'COMMENT', body: summaryBody(result), comments };
 }
 

@@ -44,7 +44,10 @@ export async function runReview(config: ReviewConfig, snapshot: Snapshot, packet
       const response = await attempt(provider, store, reviewId, role, { role, snapshotId: snapshot.id, packet, requestId: `${reviewId}:${role}:0`, maxOutputTokens: config.maxOutputTokens }, maxCostCents / config.maxAttempts);
       attempts += 1;
       estimatedCostUsd += cost(response.inputTokens, response.outputTokens, provider);
-      candidates.push(...(response.candidates ?? []));
+      for (const candidate of response.candidates ?? []) {
+        if (!candidateEvidenceMatchesSnapshot(candidate, snapshot)) throw new Error('provider candidate evidence did not match the reviewed snapshot');
+        candidates.push(candidate);
+      }
     }
     candidates = dedupe(candidates);
     if (candidates.length > 0) {
@@ -98,6 +101,15 @@ function validateVerificationSet(candidates: readonly Candidate[], verifications
   }
   if (seen.size !== expected.size) throw new Error('verifier omitted a candidate');
   return [...verifications];
+}
+
+function candidateEvidenceMatchesSnapshot(candidate: Candidate, snapshot: Snapshot): boolean {
+  if (candidate.evidence.length === 0 || candidate.causalChangeRef.length === 0) return false;
+  const files = new Map(snapshot.files.map((file) => [file.path, file]));
+  return [...candidate.evidence, ...candidate.causalChangeRef].every((ref) => {
+    const file = files.get(ref.path);
+    return file !== undefined && !file.binary && file.sha256 === ref.sha256 && ref.start >= 1 && ref.end >= ref.start && ref.end <= file.content.split('\n').length;
+  });
 }
 
 function makeFindings(candidates: readonly Candidate[], verifications: readonly Verification[], snapshot: Snapshot): FindingOccurrence[] {

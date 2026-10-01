@@ -78,7 +78,7 @@ export class AutomaticReviewer {
           const result = await this.#run(snapshot, this.#store);
           if (result.outcome === 'completed_clean' || result.outcome === 'completed_findings') {
             const files = await this.#client.listPullRequestFiles(pullRequest.ref);
-            const payload = buildReviewPreview(result, changedRightLines(files));
+            const payload = buildReviewPreview(result, changedRightLines(files), this.#config.maxInlineFindings);
             await this.#client.publishReview(pullRequest.ref, payload);
             this.#store.markPublication(result.reviewId, 'published');
             published += 1;

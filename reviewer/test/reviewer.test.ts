@@ -248,8 +248,8 @@ test('automatic merge refuses incomplete coverage even when the model reported c
   store.close();
 });
 
-function makeCandidate(): Candidate {
-  return { candidateId: 'candidate-1', category: 'correctness', severity: 'high', title: 'returns the wrong value', trigger: 'the changed return path is selected', expected: 'the caller receives the stored value', actual: 'the caller receives a constant', impact: 'caller behavior is incorrect', changeRelevance: 'introduced', causalChangeRef: [{ path: 'index.ts', sha256: 'source', start: 1, end: 1, side: 'RIGHT', reason: 'changed return' }], evidence: [{ path: 'index.ts', sha256: 'source', start: 1, end: 1, side: 'RIGHT', reason: 'changed return' }], verificationKind: 'model_assessment', status: 'candidate' };
+function makeCandidate(sourceSha = 'source'): Candidate {
+  return { candidateId: 'candidate-1', category: 'correctness', severity: 'high', title: 'returns the wrong value', trigger: 'the changed return path is selected', expected: 'the caller receives the stored value', actual: 'the caller receives a constant', impact: 'caller behavior is incorrect', changeRelevance: 'introduced', causalChangeRef: [{ path: 'index.ts', sha256: sourceSha, start: 1, end: 1, side: 'RIGHT', reason: 'changed return' }], evidence: [{ path: 'index.ts', sha256: sourceSha, start: 1, end: 1, side: 'RIGHT', reason: 'changed return' }], verificationKind: 'model_assessment', status: 'candidate' };
 }
 
 test('cloud pipeline uses two specialists and one verifier, then publishes only supported causal findings', async () => {
@@ -257,9 +257,10 @@ test('cloud pipeline uses two specialists and one verifier, then publishes only 
   const cfg = config(root, { profile: 'economy_cloud_luna_v1', cloudBudgetUsd: 0.10 });
   const snap = captureSnapshot(cfg, 'ref', 'HEAD');
   const built = buildContext(snap, cfg.maxPacketBytes);
+  const sourceSha = snap.files.find((file) => file.path === 'index.ts')?.sha256 ?? '';
   const responses: ProviderResponse[] = [
-    { candidates: [makeCandidate()], inputTokens: 100, outputTokens: 100, rawStatus: 'ok' },
-    { candidates: [makeCandidate()], inputTokens: 100, outputTokens: 100, rawStatus: 'ok' },
+    { candidates: [makeCandidate(sourceSha)], inputTokens: 100, outputTokens: 100, rawStatus: 'ok' },
+    { candidates: [makeCandidate(sourceSha)], inputTokens: 100, outputTokens: 100, rawStatus: 'ok' },
     { verifications: [{ candidateId: 'candidate-1', decision: 'supported', evidenceChecked: ['index.ts'], causalLink: 'introduced', verificationKind: 'model_assessment', reason: 'causal evidence matches changed code', uncertainty: 'no runtime reproduction' }], inputTokens: 100, outputTokens: 100, rawStatus: 'ok' },
   ];
   const provider = new FakeProvider(responses);
@@ -280,8 +281,9 @@ test('verifier output cannot claim runtime proof or omit a candidate', async () 
   const cfg = config(root, { profile: 'economy_cloud_luna_v1', cloudBudgetUsd: 0.10 });
   const snap = captureSnapshot(cfg, 'ref', 'HEAD');
   const built = buildContext(snap, cfg.maxPacketBytes);
+  const sourceSha = snap.files.find((file) => file.path === 'index.ts')?.sha256 ?? '';
   const invalid: ProviderResponse[] = [
-    { candidates: [makeCandidate()], inputTokens: 1, outputTokens: 1, rawStatus: 'ok' },
+    { candidates: [makeCandidate(sourceSha)], inputTokens: 1, outputTokens: 1, rawStatus: 'ok' },
     { candidates: [], inputTokens: 1, outputTokens: 1, rawStatus: 'ok' },
     { verifications: [], inputTokens: 1, outputTokens: 1, rawStatus: 'ok' },
   ];
@@ -457,6 +459,7 @@ test('publisher preview keeps exact reviewed head and changed-line anchors', () 
   assert.doesNotMatch(preview.body, /Estimated cost|Revision:|Changed files:|Reviewed by:/);
   assert.equal(preview.comments[0]?.path, 'index.ts');
   assert.equal(preview.comments[0]?.line, 1);
+  assert.equal(buildReviewPreview(result, undefined, 0).comments.length, 0);
 });
 
 test('Responses adapter sends the configured medium reasoning route without tools or hidden retries', async () => {
@@ -475,4 +478,5 @@ test('Responses adapter sends the configured medium reasoning route without tool
   assert.deepEqual(body?.reasoning, { effort: 'medium' });
   assert.equal(body?.model, 'gpt-6-luna');
   assert.equal((body?.tools as unknown[] | undefined)?.length ?? 0, 0);
+  assert.match(String(body?.input ?? ''), /SHA256/);
 });

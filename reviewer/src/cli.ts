@@ -174,7 +174,7 @@ async function prPreview(): Promise<void> {
   const provider = providerFor(config);
   const result = await runReview(config, snapshot, packet, store, { provider, authorizeCloud: config.profile !== 'static_only' });
   const reports = writeReports(result, `${config.dataDir}/${result.reviewId}`);
-  const preview = api.previewReview(ref, buildReviewPreview(result));
+  const preview = api.previewReview(ref, buildReviewPreview(result, undefined, config.maxInlineFindings));
   store.close();
   console.log(JSON.stringify({ repository: `${owner}/${repo}`, pullRequest: number, reviewId: result.reviewId, outcome: result.outcome, snapshotId: snapshot.id, files: snapshot.files.length, changedPaths: snapshot.changedPaths, report: reports, publication: { mode: 'preview', review: preview } }, null, 2));
 }
@@ -194,7 +194,7 @@ async function prReview(): Promise<void> {
   const result = await runReview(config, snapshot, packet, store, { provider: providerFor(config), authorizeCloud: true });
   const reports = writeReports(result, `${config.dataDir}/${result.reviewId}`);
   const files = await api.listPullRequestFiles(ref);
-  const payload = buildReviewPreview(result, changedRightLines(files));
+  const payload = buildReviewPreview(result, changedRightLines(files), config.maxInlineFindings);
   let publication: { readonly reviewId: number; readonly url?: string } | undefined;
   if (result.outcome === 'completed_clean' || result.outcome === 'completed_findings') publication = await api.publishReview(ref, payload);
   let summaryUpdated = false;
