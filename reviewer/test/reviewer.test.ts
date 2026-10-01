@@ -269,6 +269,7 @@ test('cloud pipeline uses two specialists and one verifier, then publishes only 
   assert.equal(result.outcome, 'completed_findings');
   assert.equal(result.attempts, 3);
   assert.equal(result.findings.length, 1);
+  assert.equal(result.findings[0]?.candidate.evidence[0]?.sha256, sourceSha);
   assert.equal(provider.requests.length, 3);
   assert.equal(provider.requests[2]?.role, 'verifier');
   assert.equal(result.findings[0]?.verification.verificationKind, 'model_assessment');

@@ -44,10 +44,7 @@ export async function runReview(config: ReviewConfig, snapshot: Snapshot, packet
       const response = await attempt(provider, store, reviewId, role, { role, snapshotId: snapshot.id, packet, requestId: `${reviewId}:${role}:0`, maxOutputTokens: config.maxOutputTokens }, maxCostCents / config.maxAttempts);
       attempts += 1;
       estimatedCostUsd += cost(response.inputTokens, response.outputTokens, provider);
-      for (const candidate of response.candidates ?? []) {
-        if (!candidateEvidenceMatchesSnapshot(candidate, snapshot)) throw new Error('provider candidate evidence did not match the reviewed snapshot');
-        candidates.push(candidate);
-      }
+      for (const candidate of response.candidates ?? []) candidates.push(normalizeCandidateEvidence(candidate, snapshot, packet));
     }
     candidates = dedupe(candidates);
     if (candidates.length > 0) {
@@ -103,13 +100,19 @@ function validateVerificationSet(candidates: readonly Candidate[], verifications
   return [...verifications];
 }
 
-function candidateEvidenceMatchesSnapshot(candidate: Candidate, snapshot: Snapshot): boolean {
-  if (candidate.evidence.length === 0 || candidate.causalChangeRef.length === 0) return false;
-  const files = new Map(snapshot.files.map((file) => [file.path, file]));
-  return [...candidate.evidence, ...candidate.causalChangeRef].every((ref) => {
-    const file = files.get(ref.path);
-    return file !== undefined && !file.binary && file.sha256 === ref.sha256 && ref.start >= 1 && ref.end >= ref.start && ref.end <= file.content.split('\n').length;
-  });
+function normalizeCandidateEvidence(candidate: Candidate, snapshot: Snapshot, packet: ContextPacket): Candidate {
+  if (candidate.evidence.length === 0 || candidate.causalChangeRef.length === 0) throw new Error('provider candidate omitted evidence');
+  const selected = new Map(packet.files.map((file) => [file.path, file]));
+  const normalize = (ref: Candidate['evidence'][number]): Candidate['evidence'][number] => {
+    const file = selected.get(ref.path);
+    if (!file || file.binary || ref.start < 1 || ref.end < ref.start || ref.end > file.content.split('\n').length) throw new Error(`provider evidence is outside the selected snapshot: ${ref.path}:${ref.start}-${ref.end}`);
+    return { ...ref, sha256: file.sha256 };
+  };
+  const causalChangeRef = candidate.causalChangeRef.map(normalize);
+  if (candidate.changeRelevance === 'introduced' || candidate.changeRelevance === 'worsened') {
+    for (const ref of causalChangeRef) if (!snapshot.changedPaths.includes(ref.path)) throw new Error(`provider causal evidence does not reference a changed path: ${ref.path}`);
+  }
+  return { ...candidate, evidence: candidate.evidence.map(normalize), causalChangeRef };
 }
 
 function makeFindings(candidates: readonly Candidate[], verifications: readonly Verification[], snapshot: Snapshot): FindingOccurrence[] {
