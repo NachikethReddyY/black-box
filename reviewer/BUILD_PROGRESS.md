@@ -1,0 +1,29 @@
+# Reviewer build progress
+
+## Completed
+
+- [x] Read the eleven reviewer plans and autonomous build directive.
+- [x] Added explicit model, snapshot, provenance, hidden-retry, phase, and evidence decisions to the planning docs.
+- [x] Created a typed reviewer package with automatic bounded Luna selection when `LUNA_API_KEY` is present.
+- [x] Implemented local working-tree, staged, and exact-ref snapshot capture with content-derived IDs.
+- [x] Implemented secret scanning and redaction before model packet creation.
+- [x] Implemented TypeScript/JavaScript AST symbol extraction and bounded context packets.
+- [x] Implemented SQLite reviews, reservations, attempts, and preview outbox state.
+- [x] Implemented direct Responses and TokenRouter route contracts with strict response validation.
+- [x] Implemented two-specialist, verifier, dedupe, finding identity, and cost accounting pipeline.
+- [x] Implemented GitHub PR metadata/file/archive reads, changed-line validation, and PR-only COMMENT publication.
+- [x] Added fourteen passing unit/fixture tests and a static CLI run against this checkout.
+- [x] Added a loopback-only bearer-token status service and WSL2 systemd example.
+- [x] Added doctor, status, backup/restore, export, and help commands.
+- [x] Added injected GitHub transport coverage and changed-line publication-preview coverage.
+- [x] Added an offline labelled smoke evaluation with clean and seeded-bug controls.
+- [x] Ran Worker, dashboard, project, and runner regression checks.
+- [x] Ran one public pull-request preview against `psf/requests#7628` without a model call or GitHub write.
+
+## Verification limits recorded
+
+- [x] Run one bounded live PR attempt; provider rejected the configured key before any model attempt or charge.
+- [ ] Run one bounded PR COMMENT publication after a valid provider key is available.
+- [x] Recorded that OrbStack/WSL2 deployment could not be verified from this host because the advertised VM address was unreachable.
+- [x] Wrote `BUILD_REPORT.md` with exact commands, results, and remaining limitations.
+- [x] Create and link the requested draft PR after the final checkpoint commit.

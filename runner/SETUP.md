@@ -1,6 +1,8 @@
-# BlackBox runner v0.1: Windows 11 + WSL2
+# BlackBox runner v0.1: Ubuntu self-hosted runner
 
-This directory is a setup skeleton for a Linux GitHub Actions self-hosted runner inside Ubuntu on WSL2. It does not install packages, download the runner, register a runner, create a Windows service, or configure Docker for you.
+This directory sets up the Ubuntu host that receives Black Box CI and AI reviewer jobs through GitHub Actions. GitHub reaches the host through the runner's outbound HTTPS connection; no inbound port, public IP, Cloudflare tunnel, or Tailscale route is required. Windows 11 plus WSL2 remains a supported local fallback, but it is not the automatic PR ingress.
+
+The scripts do not install system packages, register a runner, or store GitHub credentials. They can install verified user-space Node, pnpm, and Actions runner files after you have prepared Ubuntu.
 
 GitHub's documentation lists Ubuntu 20.04+ as a supported Linux runner OS and requires Docker on Linux when workflows use Docker container actions or service containers. Read the current official instructions before registration:
 
@@ -8,10 +10,10 @@ GitHub's documentation lists Ubuntu 20.04+ as a supported Linux runner OS and re
 - [Self-hosted runner reference](https://docs.github.com/en/actions/reference/runners/self-hosted-runners)
 - [Using labels with self-hosted runners](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/apply-labels)
 
-## 1. Prepare Windows and Ubuntu in WSL2
+## 1. Prepare Ubuntu
 
-1. Enable WSL2 and install an Ubuntu distribution using Microsoft's current Windows instructions.
-2. Open the Ubuntu terminal. Run the commands below there, not in PowerShell.
+1. Use a supported Ubuntu Linux host. A Windows PC with Ubuntu in WSL2 can use the same commands as a local fallback.
+2. Run the commands below in the Ubuntu shell, not in PowerShell.
 3. Keep runner files, caches, and job work under the Linux filesystem. The default paths are:
    - runner install: `$HOME/actions-runner`
    - state and logs: `$HOME/.local/share/black-box-runner/state`
@@ -35,7 +37,7 @@ Edit `runner.env` only for local, non-secret values. Do not put a GitHub token i
 ./scripts/status.sh
 ```
 
-`prereq.sh` is read-only. It reports whether this host looks like WSL2, whether Bash, curl, Git, and Docker are available, whether the Docker daemon responds, and whether the runner executable is present. A non-WSL host may report a failed WSL2 check even when the scripts themselves are valid.
+`prereq.sh` is read-only. It reports whether Linux, Bash, curl, Git, and Docker are available, whether the Docker daemon responds, and whether the runner executable is present. Native Ubuntu is expected; WSL2 is only a local hosting option.
 
 Install or configure Ubuntu, Docker Desktop's WSL integration, and other prerequisites using your organization's approved process. This repository does not automate those changes.
 
@@ -55,7 +57,7 @@ Operator-reported WSL validation for `/home/vbook/BlackBox` recorded these versi
 
 ## 3. Install the runner using GitHub's current commands
 
-Open the target repository on GitHub, then go to **Settings → Actions → Runners → New self-hosted runner → Linux → x64** (choose the architecture shown for your machine). GitHub displays versioned download and extraction commands for the current runner release.
+Open the target repository on GitHub, then go to **Settings → Actions → Runners → New self-hosted runner → Linux**. Choose the architecture shown for the Ubuntu host. The installer supports `x64` and `arm64`; GitHub displays the current versioned commands.
 
 Paste and run those official download/extraction commands in Ubuntu, with the extraction directory set to `$HOME/actions-runner`. Do not copy a registration token into this repository or into shell history you intend to share.
 
@@ -66,7 +68,7 @@ On the same GitHub page, copy the **registration/configuration commands GitHub g
 The generated Linux command should configure the runner with the custom label and the dedicated job workspace required by this skeleton:
 
 ```text
-./config.sh --url <PASTE_REPOSITORY_URL_FROM_GITHUB> --token <PASTE_SHORT_LIVED_TOKEN_FROM_GITHUB> --labels black-box-linux --work /home/YOUR_USER/.local/share/black-box-runner/work
+./config.sh --url <PASTE_REPOSITORY_URL_FROM_GITHUB> --token <PASTE_SHORT_LIVED_TOKEN_FROM_GITHUB> --labels black-box-reviewer --work /home/YOUR_USER/.local/share/black-box-runner/work
 ```
 
 Replace `YOUR_USER` with the Ubuntu username and use the exact URL, token, and any current flags shown by GitHub. If GitHub asks for a runner name, use a local name such as `black-box-wsl2`.
@@ -78,15 +80,28 @@ When registration finishes, verify that `$HOME/actions-runner/run.sh` exists. Th
 ./scripts/prereq.sh
 ```
 
-The expected workflow routing value requires all four labels, including the default x64 label:
+The AI reviewer workflow routes to the three labels below:
 
 ```yaml
-runs-on: [self-hosted, linux, x64, black-box-linux]
+runs-on: [self-hosted, linux, black-box-reviewer]
 ```
 
-A runner must be online and carry every requested label to receive a job. Confirm the label and online state in GitHub before using this `runs-on` value.
+A runner must be online and carry every requested label to receive a job. Confirm the label and online state in GitHub before opening a test PR. The older `black-box-linux` label belongs to the separate Black Box CI dispatch template and is not used by the AI reviewer workflow.
 
-## 5. Start, stop, and inspect
+## 5. Add the workflow secrets
+
+In the repository's **Settings → Secrets and variables → Actions**, add these encrypted secrets. Names are public configuration; values stay in GitHub and are never committed:
+
+```text
+LUNA_API_KEY              # or TOKENROUTER_API_KEY, from TokenRouter
+BB_GITHUB_APP_ID
+BB_GITHUB_APP_INSTALLATION_ID
+BB_GITHUB_APP_PRIVATE_KEY   # PEM contents for BB CoPilot Bot, passed in memory
+```
+
+The workflow uses the TokenRouter base URL `https://api.tokenrouter.com/v1`, the configured Luna model route, a `$0.10` per-PR ceiling, and updates only the Black Box marker block in the PR description. Do not add `GITHUB_TOKEN` as a publication credential. The reviewer publishes with the installed GitHub App identity.
+
+## 6. Start, stop, and inspect
 
 These commands act only when you invoke them explicitly:
 
@@ -98,7 +113,7 @@ These commands act only when you invoke them explicitly:
 
 `start.sh` launches the already-configured `run.sh` process and records its PID and log under `$HOME/.local/share/black-box-runner/state`. It does not register a runner or install a service. `stop.sh` sends SIGTERM to the PID recorded by `start.sh`, prints `stopping`, and waits for process exit. It prints `runner stopped` only after the process exits; otherwise it reports `runner still running` and returns failure. The upstream `run.sh` source installs its process-group trap when `RUNNER_MANUALLY_TRAP_SIG` is set; this wrapper sets that documented mode. The service wrapper also converts SIGTERM to SIGINT, so this wrapper does not claim completion merely because a signal was sent.
 
-This skeleton does not claim Windows service support. If you need automatic startup, follow the current GitHub and WSL2 guidance and test that separately.
+For native Ubuntu, copy `config/black-box-runner.service.example` to `~/.config/systemd/user/black-box-runner.service` after interactive registration, replace `%h` only if your systemd version requires an absolute path, then run `systemctl --user daemon-reload && systemctl --user enable --now black-box-runner.service`. Keep the service user-scoped or owned by a dedicated unprivileged account. For WSL2, start the runner with the existing helper or a tested Windows startup task. Neither option changes GitHub's outbound-only connection model.
 
 ## Black Box CLI for agent-triggered runs
 
