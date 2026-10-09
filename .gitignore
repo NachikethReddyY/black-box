@@ -1,4 +1,7 @@
 node_modules/
+.env
+.env.*
+!.env.example
 .wrangler/
 worker/.dev.vars
 worker/.env*
@@ -14,3 +17,4 @@ __pycache__/
 *.pyc
 worker/wrangler.local.toml
 worker/.env
+!worker/.env.example

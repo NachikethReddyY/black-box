@@ -1,0 +1,21 @@
+{
+  "repository": "psf/requests",
+  "pullRequest": 7628,
+  "headSha": "3b9342848c5de80080dff749a2ab8a771a97d469",
+  "snapshotId": "snap_a65d3e2e9279fe65af43",
+  "outcome": "completed_clean",
+  "filesRead": 128,
+  "changedPaths": [
+    ".github/workflows/codeql-analysis.yml"
+  ],
+  "publication": {
+    "mode": "preview",
+    "githubWritePerformed": false,
+    "comments": 0
+  },
+  "limitations": [
+    "static_only profile",
+    "no cloud model request",
+    "no GitHub publication"
+  ]
+}

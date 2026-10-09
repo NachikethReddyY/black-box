@@ -1,0 +1,22 @@
+{
+  "date": "2026-09-30",
+  "repository": "NachikethReddyY/black-box",
+  "pullRequest": 1,
+  "reviewedHead": "194bde358bcc7771e77ceaa7afc2ecc46ad8c022",
+  "snapshotId": "snap_363d1213b7210319ffa8",
+  "providerRoute": "direct-openai-responses",
+  "providerStatus": 401,
+  "providerError": "invalid_api_key",
+  "modelAttempts": 0,
+  "estimatedCostUsd": 0,
+  "publication": "not_attempted",
+  "postCheck": {
+    "reviews": 0,
+    "issueComments": 0
+  },
+  "limits": [
+    "The key value is intentionally omitted.",
+    "The PR snapshot and GitHub read authentication succeeded.",
+    "The direct provider rejected the key before a model request was admitted, so no model spend occurred."
+  ]
+}

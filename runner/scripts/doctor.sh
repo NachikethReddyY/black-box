@@ -12,17 +12,9 @@ ok() { printf 'ok: %s\n' "$*"; }
 
 printf 'BlackBox runner doctor\nconfig: %s\nlabel: %s\n' "$CONFIG_FILE" "$RUNNER_LABEL"
 
-if is_linux; then
-  ok "Linux kernel detected ($(uname -r))"
-else
-  blocker 'Linux inside WSL2 is required'
-fi
+if is_linux; then ok "Linux kernel detected ($(uname -r))"; else blocker 'Linux is required'; fi
 
-if grep -qi microsoft /proc/version 2>/dev/null; then
-  ok 'WSL kernel marker detected'
-else
-  warn 'WSL kernel marker not detected; a native Linux host may still be valid'
-fi
+if grep -qi microsoft /proc/version 2>/dev/null; then ok 'WSL kernel marker detected (local fallback)'; else ok 'native Linux host detected'; fi
 
 if validate_config >/dev/null 2>&1; then ok 'runner paths and ownership policy are valid'; else blocker 'runner paths or ownership policy are invalid'; fi
 if [[ -f "$OWNER_FILE" ]]; then ok 'runner data ownership marker exists'; else blocker 'runner paths are not initialized'; fi

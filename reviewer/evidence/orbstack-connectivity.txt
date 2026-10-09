@@ -1,0 +1,9 @@
+OrbStack deployment probe
+Date: 2026-09-30
+
+The configured hostname ubuntu.orb.local resolved locally to 192.168.138.12 and an IPv6 address.
+The supplied address 192.168.139.206 was not reachable from this host.
+SSH to ubuntu.orb.local returned "No route to host".
+
+No host restart, firewall change, VM mutation, or repeated retry was attempted.
+Status: deployment_not_verified

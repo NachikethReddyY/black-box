@@ -48,7 +48,53 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [ ] Add authenticated WSL host metrics ingestion and resource view.
 - [x] Verify the dashboard shell, Run History, Logs, Runners, search, responsive layout, and production build in a browser.
 - [x] Document and implement the OAuth credential gate.
+
+## Self-hosted AI reviewer planning (thread current, 29 September 2026)
+
+- [x] Inspect Black Box hosting, Worker, runner, dashboard, and existing reviewer integration points.
+- [x] Produce implementation, architecture, AI pipeline, cost, threat, evaluation, backlog, operations, limitation, and feature traceability documents.
+- [x] Add GitHub inline review-thread anchoring, PR-description marker rules, and Check Run Agent boundaries.
+- [x] Add replaceable cheap-model ensemble design, specialist roles, evidence verification, model registry, per-role reservations, and ablation pilot.
+- [x] Add Greptile-inspired graph indexing, bounded swarm review, custom rules, approved learning, agent handoff, security/SCA evidence, partner context, and deferred runtime validation.
+- [x] Recenter the plan on the AI code-review product goal, with matched quality/cost/reliability scorecards instead of vendor feature parity.
+- [x] Reconcile the four-call schedule, route capability fixtures, causal finding evidence, persistent finding identity, lease fencing, and P1 secret scan/redaction boundary.
+- [x] Configure the persistent reviewer for the Windows PC plus WSL2 Linux filesystem and reserve Daytona for disposable P3 runtime validation only.
+- [x] Add the complete self-contained T-01..T-36 acceptance definitions and align P1/P2/P3 phase ownership.
+- [x] Validate source notes, traceability IDs, acceptance IDs, required documents, and whitespace.
+- [x] Implement the connected reviewer foundation, bounded Luna route, PR-only COMMENT publisher, and local status service.
+- [x] Run reviewer typecheck, 15 focused tests, offline evaluation, public PR snapshot, and fake GitHub publication tests.
+- [x] Configure the supplied TokenRouter key at `https://api.tokenrouter.com/v1` with `openai/gpt-5.6-luna` and run a bounded live review against `NachikethReddyY/black-box#1`.
+- [x] Verify live GitHub `COMMENT` publication with changed-line filtering and record the model usage and exact reviewed head.
+- [ ] Run the same reviewer on an independent seeded-bug PR to measure detection quality without relying on this documentation-heavy clean control.
+
+## GitHub App publication identity (thread current, 30 September 2026)
+
+- [x] Remove personal-account publication from the reviewer CLI. `pr-review` now requires a GitHub App installation token.
+- [x] Add Node GitHub App JWT signing, installation-token exchange, private-key permission checks, and fixture coverage.
+- [x] Document App-only publication and keep `GITHUB_TOKEN` limited to optional private PR preview reads.
+- [x] Configure the existing App ID and target-repository installation ID in the local reviewer environment before the first bot-authenticated PR review.
+- [ ] Run one bounded bot-authenticated review only on an owned repository after the App installation is confirmed.
+
+## Automatic PR reviewer (thread current, 1 October 2026)
+
+- [x] Add App-installation repository and open-PR polling with a durable per-head claim.
+- [x] Reuse the exact snapshot, pipeline, changed-line publisher, and App identity for each new PR head.
+- [x] Add restart, draft filtering, duplicate, and head-change tests without live model calls.
+- [x] Add WSL2 watcher startup instructions and verify the local watcher remains within the per-review budget.
+- [x] Add marker-owned PR summaries and fail-closed CI-gated squash merge policy.
+- [x] Exercise a real non-draft PR with passing checks; keep automatic merge blocked when the exact head has findings or partial coverage.
+- [x] Add a same-repository GitHub Actions trigger for owner-authored PR events on the Ubuntu `black-box-reviewer` runner.
+- [x] Configure the repository's encrypted TokenRouter and BB CoPilot Bot App secrets without committing values.
+- [x] Run one live PR review that published as `bb-copilot-bot[bot]`, anchored two changed-line comments, and updated the marker-owned PR summary.
+- [x] Close the live-review findings by keeping the App key in memory and limiting automatic cloud review to owner-authored PRs.
+- [x] Simplify public BB AI summaries, remove displayed cost and technical identifiers, and add a deterministic mergeability score.
 - [ ] Set the GitHub App OAuth client secret and dashboard session secret in Cloudflare.
+
+## Reviewer App contents permission (verified, 1 October 2026)
+
+- [x] Verify current App and installation permissions without exposing credentials: both report `contents: write`.
+- [x] Document the required GitHub App setting **Contents: Read and write** (`contents: write`) and installation approval, separately from the read-only CI workflow token.
+- [x] Save the App permission change, accept the installation update, and verify installation `contents: write`.
 
 ### CI intelligence backlog
 
