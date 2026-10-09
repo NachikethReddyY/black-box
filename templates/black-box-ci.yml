@@ -50,7 +50,7 @@ concurrency:
 jobs:
   local-checks:
     if: inputs.source_event != 'schedule'
-    runs-on: ${{ fromJSON(inputs.runner == 'home' && '["self-hosted","linux","x64","black-box-linux"]' || inputs.runner == 'github' && vars.BLACK_BOX_GITHUB_ENABLED == 'true' && '["ubuntu-24.04"]' || inputs.runner == 'blacksmith' && vars.BLACK_BOX_BLACKSMITH_ENABLED == 'true' && vars.BLACK_BOX_BLACKSMITH_RUNS_ON_JSON || '[]') }}
+    runs-on: ${{ fromJSON(inputs.runner == 'home' && '["self-hosted","linux","x64","blackbox"]' || inputs.runner == 'github' && vars.BLACK_BOX_GITHUB_ENABLED == 'true' && '["ubuntu-24.04"]' || inputs.runner == 'blacksmith' && vars.BLACK_BOX_BLACKSMITH_ENABLED == 'true' && vars.BLACK_BOX_BLACKSMITH_RUNS_ON_JSON || '[]') }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -76,7 +76,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - name: Export native production bundles
-        run: pnpm exec expo export --platform all
+        run: pnpm export
 
   local-postgres:
     if: inputs.source_event != 'schedule'
@@ -86,7 +86,7 @@ jobs:
       BLACKBOX_RUNNER_ID: black-box-ci
       BLACKBOX_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
       BLACKBOX_REQUEST_ID: ${{ inputs.request_id }}
-    runs-on: ${{ fromJSON(inputs.runner == 'home' && '["self-hosted","linux","x64","black-box-linux"]' || inputs.runner == 'github' && vars.BLACK_BOX_GITHUB_ENABLED == 'true' && '["ubuntu-24.04"]' || inputs.runner == 'blacksmith' && vars.BLACK_BOX_BLACKSMITH_ENABLED == 'true' && vars.BLACK_BOX_BLACKSMITH_RUNS_ON_JSON || '[]') }}
+    runs-on: ${{ fromJSON(inputs.runner == 'home' && '["self-hosted","linux","x64","blackbox"]' || inputs.runner == 'github' && vars.BLACK_BOX_GITHUB_ENABLED == 'true' && '["ubuntu-24.04"]' || inputs.runner == 'blacksmith' && vars.BLACK_BOX_BLACKSMITH_ENABLED == 'true' && vars.BLACK_BOX_BLACKSMITH_RUNS_ON_JSON || '[]') }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -130,6 +130,8 @@ jobs:
       - run: pnpm db:up --port 55432
       - run: pnpm db:verify
       - run: pnpm db:test
+      - run: pnpm activity:test:database
+      - run: pnpm impact:test:database
       - run: pnpm participation:test:database
       - run: pnpm account:test:database
       - run: pnpm points:test:database
@@ -140,7 +142,7 @@ jobs:
       - run: pnpm rewards:test:database
       - name: Build the pinned offline report parser
         run: |
-          docker build --tag "amr-report-parser:ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --iidfile "$RUNNER_TEMP/report-parser-image-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" -f server/reports/Dockerfile .
+          docker build --tag "amr-report-parser:ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --iidfile "$RUNNER_TEMP/report-parser-image-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" -f services/api/reports/Dockerfile .
           echo "REPORT_PARSER_IMAGE=$(cat "$RUNNER_TEMP/report-parser-image-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}")" >> "$GITHUB_ENV"
           node --input-type=module -e 'import {namespaceFor} from "./scripts/local-db.mjs"; import {appendFileSync} from "node:fs"; appendFileSync(process.env.GITHUB_ENV, "REPORT_TEST_STORAGE="+process.env.RUNNER_TEMP+"/"+namespaceFor(process.cwd())+"/test\n");'
       - run: pnpm reports:test:container
@@ -168,7 +170,7 @@ jobs:
           case "${AMR_LOCAL_DB_AUTH_DIR:-}" in "$HOME"/.local/share/black-box-runner/state/transient/"$GITHUB_RUN_ID"-"$GITHUB_RUN_ATTEMPT"/auth) rm -rf -- "$AMR_LOCAL_DB_AUTH_DIR" ;; *) echo 'Refusing unexpected auth dir' >&2; exit 1 ;; esac
 
   source-and-dependencies:
-    runs-on: ${{ fromJSON(inputs.runner == 'home' && '["self-hosted","linux","x64","black-box-linux"]' || inputs.runner == 'github' && vars.BLACK_BOX_GITHUB_ENABLED == 'true' && '["ubuntu-24.04"]' || inputs.runner == 'blacksmith' && vars.BLACK_BOX_BLACKSMITH_ENABLED == 'true' && vars.BLACK_BOX_BLACKSMITH_RUNS_ON_JSON || '[]') }}
+    runs-on: ${{ fromJSON(inputs.runner == 'home' && '["self-hosted","linux","x64","blackbox"]' || inputs.runner == 'github' && vars.BLACK_BOX_GITHUB_ENABLED == 'true' && '["ubuntu-24.04"]' || inputs.runner == 'blacksmith' && vars.BLACK_BOX_BLACKSMITH_ENABLED == 'true' && vars.BLACK_BOX_BLACKSMITH_RUNS_ON_JSON || '[]') }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -196,7 +198,7 @@ jobs:
       - run: pnpm security:check
 
   dast-tooling:
-    runs-on: ${{ fromJSON(inputs.runner == 'home' && '["self-hosted","linux","x64","black-box-linux"]' || inputs.runner == 'github' && vars.BLACK_BOX_GITHUB_ENABLED == 'true' && '["ubuntu-24.04"]' || inputs.runner == 'blacksmith' && vars.BLACK_BOX_BLACKSMITH_ENABLED == 'true' && vars.BLACK_BOX_BLACKSMITH_RUNS_ON_JSON || '[]') }}
+    runs-on: ${{ fromJSON(inputs.runner == 'home' && '["self-hosted","linux","x64","blackbox"]' || inputs.runner == 'github' && vars.BLACK_BOX_GITHUB_ENABLED == 'true' && '["ubuntu-24.04"]' || inputs.runner == 'blacksmith' && vars.BLACK_BOX_BLACKSMITH_ENABLED == 'true' && vars.BLACK_BOX_BLACKSMITH_RUNS_ON_JSON || '[]') }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5

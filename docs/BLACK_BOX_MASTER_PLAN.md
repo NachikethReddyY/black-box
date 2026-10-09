@@ -27,7 +27,7 @@ The repository already contains these pieces:
 
 - A Cloudflare Worker and D1 request store for signed GitHub events, allowlisted repositories and actors, home-first selection, durable leases, duplicate protection, bounded reconciliation, exact revision checks, and paid fallback disabled by default.
 - A private GitHub App installed for `NachikethReddy/AMR-Fan-App`.
-- A Linux Actions runner registered as `black-box-linux`, previously hosted in WSL2 on the Windows PC.
+- A Linux Actions runner registered as `blackbox`, previously hosted in WSL2 on the Windows PC.
 - Runner scripts for prerequisites, lifecycle, startup cleanup, telemetry, cache policy, local SQLite history, FTS5 log search, JUnit ingestion, cache events, execution manifests, and a read-only doctor.
 - A dashboard served by the Worker with GitHub OAuth scaffolding, run history, logs, runners, host metrics, filters, and the Black Box visual direction.
 - An AMR workflow template that passes a provider, exact commit, request ID, source ref, source event, and pull request number to a single authoritative workflow.

@@ -62,7 +62,7 @@ Required local secrets and vars:
 - `DISPATCH_RUNNERS`: `home`, `github`, `blacksmith`, and/or `waiting`, in fallback order.
 - `ENABLE_PAID_FALLBACKS`: defaults to false.
 - `GITHUB_WORKFLOW_FILE`, `GITHUB_WORKFLOW_REF`: workflow file and dispatch ref.
-- `HOME_RUNNER_LABEL`: optional self-hosted runner label, default `black-box-linux`. Availability comes from GitHub's repository self-hosted runner API and requires an online, idle runner with `self-hosted`, `linux`, `x64`, and `black-box-linux` labels. An offline or busy HOME runner fails closed to `waiting`; paid fallbacks are only considered when explicitly enabled.
+- `HOME_RUNNER_LABEL`: optional self-hosted runner label, default `blackbox`. Availability comes from GitHub's repository self-hosted runner API and requires an online, idle runner with `self-hosted`, `linux`, `x64`, and `blackbox` labels. An offline or busy HOME runner fails closed to `waiting`; paid fallbacks are only considered when explicitly enabled.
 - `GITHUB_OAUTH_CLIENT_ID`: the GitHub App OAuth client ID. The current App client ID is public metadata and is documented in `dashboard/README.md`.
 - `GITHUB_OAUTH_CLIENT_SECRET`: the GitHub App OAuth client secret. Store it with `wrangler secret put`; do not commit it.
 - `DASHBOARD_SESSION_SECRET`: a separate random secret used to encrypt OAuth tokens in D1.

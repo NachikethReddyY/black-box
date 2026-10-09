@@ -17,7 +17,7 @@ export function configFromEnv(env: WorkerEnv): DispatcherConfig {
   const workflowFile = env.GITHUB_WORKFLOW_FILE ?? 'black-box-ci.yml';
   const workflowRef = env.GITHUB_WORKFLOW_REF ?? 'main';
   if (!/^[\w.-]+\.ya?ml$/.test(workflowFile) || !/^[\w/-]+$/.test(workflowRef)) throw new Error('invalid_workflow_configuration');
-  return { trustedRepositories: new Set(repositories), trustedActors: new Set(actors), runnerOrder, paidFallbacksEnabled: paid === 'true', workflowFile, workflowRef, homeRunnerLabel: env.HOME_RUNNER_LABEL ?? 'black-box-linux', githubApiBaseUrl: 'https://api.github.com', maxAttempts: 3 };
+  return { trustedRepositories: new Set(repositories), trustedActors: new Set(actors), runnerOrder, paidFallbacksEnabled: paid === 'true', workflowFile, workflowRef, homeRunnerLabel: env.HOME_RUNNER_LABEL ?? 'blackbox', githubApiBaseUrl: 'https://api.github.com', maxAttempts: 3 };
 }
 export function selectRunner(config: DispatcherConfig, available: ReadonlySet<Runner>): Runner {
   return config.runnerOrder.find(x => x !== 'waiting' && available.has(x) && (x === 'home' || config.paidFallbacksEnabled)) ?? 'waiting';

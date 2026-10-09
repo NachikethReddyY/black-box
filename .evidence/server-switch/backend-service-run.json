@@ -1,0 +1,17 @@
+[
+  {
+    "id": 109959248569,
+    "name": "Backend quality",
+    "conclusion": "success",
+    "runner_id": 22,
+    "runner_name": "blackbox-bb-1",
+    "labels": [
+      "self-hosted",
+      "linux",
+      "x64",
+      "black-box-linux"
+    ],
+    "started_at": "2026-09-30T15:24:05Z",
+    "completed_at": "2026-09-30T15:25:03Z"
+  }
+]

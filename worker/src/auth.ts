@@ -51,7 +51,7 @@ export async function createInstallationToken(env: Pick<WorkerEnv, "GITHUB_APP_I
   const jwt = await createAppJwt(env);
   const response = await fetcher(`${apiBaseUrl.replace(/\/$/, "")}/app/installations/${encodeURIComponent(env.GITHUB_APP_INSTALLATION_ID)}/access_tokens`, {
     method: "POST",
-    headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${jwt}`, "X-GitHub-Api-Version": "2022-11-28" },
+    headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${jwt}`, "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "Black-Box-CI" },
   });
   if (!response.ok) throw new Error(`GitHub installation token failed with status ${response.status}`);
   const payload: unknown = await response.json();

@@ -4,6 +4,11 @@ import { workflowDispatchInput } from './github';
 import { requiredJobs } from './types';
 import type { DispatcherConfig, GitHubApi, RequestRecord, WorkflowRun } from './types';
 export interface OrchestratorDependencies { readonly store: D1RequestStore; readonly github: GitHubApi; readonly config: DispatcherConfig; readonly now: () => number }
+function retryMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  const match = /^(?:github_http_|dispatch_http_|check_http_|check_update_http_|GitHub installation token failed with status )(\d{3})$/.exec(message);
+  return match ? `reconciliation_failed:github_http_${match[1]}` : 'reconciliation_failed_retry_next_minute';
+}
 async function ensureChecks(r: RequestRecord, d: OrchestratorDependencies): Promise<RequestRecord> {
   const checks = { ...r.checks };
   for (const name of requiredJobs(r)) {
@@ -91,7 +96,7 @@ export async function tick(d: OrchestratorDependencies) {
         if (r.state === 'claimed') await d.store.markAmbiguous(r.requestId,d.now());
         error = await reconcile(r,d);
       }
-    } catch { error = 'reconciliation_failed_retry_next_minute'; }
+    } catch (caught) { error = retryMessage(caught); }
     finally { await d.store.release(candidate.requestId,d.now(),error); }
   }
 }

@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse, json, os, re, sys, urllib.error, urllib.request, uuid
 
 API = 'https://api.github.com'
-HOME_LABELS = {'self-hosted', 'linux', 'x64', 'black-box-linux'}
+HOME_LABELS = {'self-hosted', 'linux', 'x64', 'blackbox'}
 SHA = re.compile(r'^[0-9a-fA-F]{40}$')
 REF = re.compile(r'^refs/(heads|pull)/[A-Za-z0-9_./-]+$')
 

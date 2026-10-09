@@ -61,3 +61,30 @@ Publication evidence: private repository `https://github.com/NachikethReddyY/bla
 - [x] Add bounded run timing records for future step and workflow comparisons. Live runner event ingestion remains pending.
 - [ ] Add evidence-backed PR summaries and diagnostic actions before AI suggestions.
 - [ ] Add reviewed AI explanations and patches only after logs, diffs, and test reports are redacted and bounded.
+
+## Ubuntu runner migration (thread server-switch, 30 September 2026)
+
+- [x] Inspect the clean BlackBox main checkout, AMR workflow routing, and live runner inventory.
+- [x] Reach the Ubuntu server over Tailscale and prepare its dedicated BlackBox paths.
+- [x] Install checksum-verified pinned Node, pnpm, and official Actions runner.
+- [x] Change the custom label to `blackbox` in Worker, runner configuration, and migration templates.
+- [x] Verify label matching, Worker behavior, workflow validation, and runner lifecycle boundaries.
+- [x] Install Docker and verify daemon access as the non-root runner user.
+- [x] Register the Ubuntu runner and configure reliable startup.
+- [x] Switch the live Worker and AMR self-hosted selector to `blackbox` once the runner is ready.
+- [x] Run two Backend workflows on the Ubuntu runner and inspect their actual results.
+- [x] Verify the installed service override and document the observed migration status. A full reboot remains unverified.
+
+Protected scope: preserve exact-SHA checkout, existing checks, bounded Docker cleanup, home-first selection, and disabled paid fallback. The owner approved full Worker activation, so Checks/Security automatic triggers move to the Worker; Backend and Azure remain separate. Unrelated AMR work stays untouched.
+
+Observed migration proof: AMR Backend runs `36715771038`, `36736430611`, and `36742473264` succeeded on runner `blackbox-bb-1` (id 22). Both installed service startup hooks completed successfully. AMR `main` contains the consolidated workflow and CI database support. Worker request `a7ef5130-610a-4eff-ad37-a5e7b2689abb` dispatched exact commit `e3ad7d5` to run `36748076602`. Three jobs passed; `dast-tooling` remains blocked by application scan ZAP 10202 at `/admin/participation/`. The Worker published the same four check outcomes. Database cleanup was verified after failure and success. Reboot and cancellation tests are unverified.
+
+## PR 71 queued checks (thread pr71-merge-revision, 3 October 2026)
+
+- [x] Inspect the live check runs, durable request, API responses, and runner availability.
+- [x] Reproduce the missing merge SHA at the GitHub API boundary in a focused regression.
+- [x] Pin PR reads to the API contract that supplies the tested merge SHA, preserving dispatch behavior.
+- [x] Verify the regression, existing Worker tests, typecheck, and live read-only PR resolution.
+- [x] Activate the fix and observe the existing request finish after deployment authority and runner connectivity are available.
+
+Scope: preserve exact merge/head/base checks, duplicate-dispatch protection, disabled paid fallback, and all pre-existing local changes. The live request was initially pending with `waiting_for_merge_revision`; API version `2026-03-10` omitted `merge_commit_sha`, while `2022-11-28` returned it. The Worker fix was deployed as version `2c0bc880-0002-4e8b-9903-0911f86dd1bf`; runner `blackbox-bb-1` then dispatched run `37128518483`. The run completed with three successful jobs and one dependency-audit failure from the PR contents.

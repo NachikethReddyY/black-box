@@ -4,8 +4,9 @@ import { URL } from "node:url";
 import { createPrivateKey, webcrypto } from "node:crypto";
 import { configFromEnv, selectRunner } from "../src/config";
 import { createAppJwt } from "../src/auth";
+import { createInstallationToken } from "../src/auth";
 import { verifyGitHubSignature, githubSignatureForTests } from "../src/signature";
-import { runnerHasRequiredLabels, workflowDispatchInput } from "../src/github";
+import { createGitHubApi, runnerHasRequiredLabels, workflowDispatchInput } from "../src/github";
 import { manualRequest } from "../src/manual";
 import type { RequestRecord, WorkerEnv } from "../src/types";
 
@@ -26,6 +27,7 @@ test("verifies raw GitHub HMAC signatures and rejects mutations", async () => {
 test("defaults to free home/waiting runners and never selects a paid fallback unless enabled", () => {
   const safe = configFromEnv(env());
   assert.deepEqual(safe.runnerOrder, ["home", "waiting"]);
+  assert.equal(safe.homeRunnerLabel, "blackbox");
   assert.equal(selectRunner(safe, new Set(["waiting"])), "waiting");
   const paid = configFromEnv(env({ DISPATCH_RUNNERS: "home,github,waiting", ENABLE_PAID_FALLBACKS: "true" }));
   assert.equal(selectRunner(paid, new Set(["github", "waiting"])), "github");
@@ -47,8 +49,8 @@ test("workflow input preserves exact revision and correlation fields", () => {
 });
 
 test("runner label matching accepts GitHub's canonical label casing", () => {
-  assert.equal(runnerHasRequiredLabels(["self-hosted", "Linux", "X64", "black-box-linux"], "black-box-linux"), true);
-  assert.equal(runnerHasRequiredLabels(["self-hosted", "Linux", "X64"], "black-box-linux"), false);
+  assert.equal(runnerHasRequiredLabels(["self-hosted", "Linux", "X64", "blackbox"], "blackbox"), true);
+  assert.equal(runnerHasRequiredLabels(["self-hosted", "Linux", "X64"], "blackbox"), false);
 });
 
 test("App JWT uses RS256 and expected claims", async () => {
@@ -72,6 +74,48 @@ test("App JWT accepts GitHub's native PKCS#1 private key format", async () => {
   const [header, payload, signature] = jwt.split(".");
   const valid = await webcrypto.subtle.verify("RSASSA-PKCS1-v1_5", keyPair.publicKey, Buffer.from(signature, "base64url"), new TextEncoder().encode(`${header}.${payload}`));
   assert.equal(valid, true);
+});
+
+test("installation token requests identify the Black Box app", async () => {
+  const keyPair = await webcrypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
+  const pkcs8 = await webcrypto.subtle.exportKey("pkcs8", keyPair.privateKey);
+  let binary = ""; for (const byte of new Uint8Array(pkcs8)) binary += String.fromCharCode(byte);
+  const pem = `-----BEGIN PRIVATE KEY-----\n${btoa(binary)}\n-----END PRIVATE KEY-----`;
+  const response = await createInstallationToken(
+    { GITHUB_APP_ID: "42", GITHUB_APP_PRIVATE_KEY: pem, GITHUB_APP_INSTALLATION_ID: "7" },
+    "https://api.github.test",
+    async (_url, init) => {
+      assert.equal(new Headers(init?.headers).get("User-Agent"), "Black-Box-CI");
+      return new Response(JSON.stringify({ token: "installation-token" }), { status: 200 });
+    },
+  );
+  assert.equal(response, "installation-token");
+});
+
+test("pull request reads use the API version that returns the merge revision", async () => {
+  const keyPair = await webcrypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
+  const pkcs8 = await webcrypto.subtle.exportKey("pkcs8", keyPair.privateKey);
+  let binary = ""; for (const byte of new Uint8Array(pkcs8)) binary += String.fromCharCode(byte);
+  const pem = `-----BEGIN PRIVATE KEY-----\n${btoa(binary)}\n-----END PRIVATE KEY-----`;
+  const versions: string[] = [];
+  const github = createGitHubApi(
+    { ...env(), GITHUB_APP_PRIVATE_KEY: pem },
+    configFromEnv(env()),
+    async (_url, init) => {
+      versions.push(new Headers(init?.headers).get("X-GitHub-Api-Version") ?? "");
+      if (init?.method === "POST") return new Response(JSON.stringify({ token: "installation-token" }), { status: 200 });
+      return new Response(JSON.stringify({
+        state: "open",
+        head: { sha: "a".repeat(40), repo: { full_name: "acme/project" } },
+        base: { sha: "b".repeat(40), repo: { full_name: "acme/project" } },
+        merge_commit_sha: "c".repeat(40),
+        mergeable: true,
+      }), { status: 200 });
+    },
+  );
+  const pull = await github.getPullRequest("acme/project", 7);
+  assert.equal(pull.mergeCommitSha, "c".repeat(40));
+  assert.deepEqual(versions, ["2022-11-28", "2022-11-28"]);
 });
 
 test("repository allowlist and event dedupe are durable contracts", async () => {

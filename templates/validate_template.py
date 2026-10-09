@@ -22,7 +22,7 @@ def validate(text, source_dir=None):
     if "run-name: black-box:${{ inputs.request_id }}" not in text: errors.append("run-name must correlate with inputs.request_id")
     if "ref: ${{ inputs.commit_sha }}" not in text: errors.append("checkout must use inputs.commit_sha")
     if text.count("git rev-parse HEAD") != len(EXPECTED_JOBS): errors.append("each named job must prove its exact checkout revision")
-    if "inputs.runner == 'home'" not in text or 'self-hosted' not in text or 'black-box-linux' not in text: errors.append("home runner mapping must require self-hosted/linux/x64/black-box-linux")
+    if "inputs.runner == 'home'" not in text or 'self-hosted' not in text or 'blackbox' not in text: errors.append("home runner mapping must require self-hosted/linux/x64/blackbox")
     if "BLACK_BOX_GITHUB_ENABLED" not in text or "BLACK_BOX_BLACKSMITH_ENABLED" not in text: errors.append("paid provider mappings need strict enable variables")
     if re.search(r"runs-on:\s*\$\{\{\s*inputs\.runner\s*\}\}", text): errors.append("runner enum must map to labels, never pass a label directly")
     runs_on=re.findall(r"^\s*runs-on:\s*(.+?)\s*$", text, re.MULTILINE)
@@ -43,6 +43,9 @@ def validate(text, source_dir=None):
                 missing=source_signatures(job_block(source,job))-source_signatures(job_block(text,job))
                 if job == "local-postgres" and "docker image rm amr-report-parser:ci || test ! -f" in source and "docker image rm \"amr-report-parser:ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}\"" in text:
                     missing={x for x in missing if "docker image rm amr-report-parser:ci" not in x}
+                if job == "local-checks" and "run: pnpm export" in job_block(text,job):
+                    missing.discard("- run: pnpm exec expo export --platform all")
+                    missing.discard("run: pnpm exec expo export --platform all")
                 if missing: errors.append(f"{filename}/{job} source steps missing: "+"; ".join(sorted(missing)))
     return errors
 def main():

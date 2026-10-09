@@ -1,0 +1,11 @@
+--- a/.github/workflows/backend.yml
++++ b/.github/workflows/backend.yml
+@@ -16,7 +16,7 @@
+ jobs:
+   backend:
+     name: Backend quality
+-    runs-on: [self-hosted, linux, x64, black-box-linux]
++    runs-on: [self-hosted, linux, x64, blackbox]
+     timeout-minutes: 20
+     steps:
+       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5

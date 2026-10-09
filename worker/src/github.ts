@@ -23,9 +23,9 @@ export function createGitHubApi(env: WorkerEnv, config: DispatcherConfig, fetche
   // One short-lived installation token per reconciliation pass, never in D1.
   let token: Promise<string> | undefined;
   const path = (repo: string, suffix: string) => `/repos/${repo.split('/').map(encodeURIComponent).join('/')}/${suffix}`;
-  async function request(suffix: string, init: RequestInit = {}) {
+  async function request(suffix: string, init: RequestInit = {}, apiVersion = '2026-03-10') {
     token ??= createInstallationToken(env, 'https://api.github.com', fetcher);
-    return fetcher(`https://api.github.com${suffix}`, { ...init, signal: AbortSignal.timeout(10_000), headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${await token}`, 'X-GitHub-Api-Version': '2026-03-10', 'User-Agent': 'Black-Box-CI', 'Content-Type': 'application/json', ...init.headers } });
+    return fetcher(`https://api.github.com${suffix}`, { ...init, signal: AbortSignal.timeout(10_000), headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${await token}`, 'X-GitHub-Api-Version': apiVersion, 'User-Agent': 'Black-Box-CI', 'Content-Type': 'application/json', ...init.headers } });
   }
   async function json(suffix: string) { const response = await request(suffix); if (!response.ok) throw new Error(`github_http_${response.status}`); return object(await response.json()); }
   async function list(suffix: string, key: string): Promise<unknown[]> {
@@ -77,7 +77,12 @@ export function createGitHubApi(env: WorkerEnv, config: DispatcherConfig, fetche
       if (!response.ok) throw new Error(`check_update_http_${response.status}`);
     },
     async getPullRequest(repo, number) {
-      const row = await json(path(repo, `pulls/${number}`));
+      // GitHub's 2026-03-10 contract removes merge_commit_sha. PR dispatches
+      // require that exact merge revision, so keep this read on the last
+      // version that includes it until the replacement endpoint is adopted.
+      const response = await request(path(repo, `pulls/${number}`), {}, '2022-11-28');
+      if (!response.ok) throw new Error(`github_http_${response.status}`);
+      const row = object(await response.json());
       const head = object(row?.head), base = object(row?.base);
       const headSha = exactSha(head?.sha), baseSha = exactSha(base?.sha);
       if (!headSha || !baseSha || String(object(head?.repo)?.full_name).toLowerCase() !== repo || String(object(base?.repo)?.full_name).toLowerCase() !== repo) throw new Error('invalid_or_untrusted_pull_request');

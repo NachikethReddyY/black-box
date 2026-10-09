@@ -41,7 +41,7 @@ config="$stub/config.env"
 cat > "$config" <<EOF2
 RUNNER_INSTALL_DIR="$stub/actions-runner"
 RUNNER_DATA_DIR="$stub/black-box-runner"
-RUNNER_LABEL="black-box-linux"
+RUNNER_LABEL="blackbox"
 RUNNER_REQUIRE_DOCKER="false"
 EOF2
 printf abandoned >"$stub/black-box-runner/state/transient/abandoned.tmp"

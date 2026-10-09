@@ -1,0 +1,15 @@
+Ubuntu runner migration observed 2026-09-30 UTC
+
+Host: bb-1 / Ubuntu 26.04.1 LTS / x86_64
+Tailscale: 100.117.231.37
+Runner: blackbox-bb-1, GitHub runner id 22
+Labels: self-hosted, Linux, X64, black-box-linux, blackbox
+Service: actions.runner.NachikethReddyY-AMR-Fan-App.blackbox-bb-1.service active + enabled
+Docker: 29.1.3, non-root docker info succeeded
+Runner: 2.337.0, connected/listening
+
+Runs:
+- 36715771038: Backend, success, runner id 22, legacy black-box-linux workflow selector
+- 36736430611: Backend, success, runner id 22, service-backed runner, 58s
+
+The AMR repository currently has no .github/workflows/black-box-ci.yml. The Worker production dispatch workflow therefore remains a separate activation gate.

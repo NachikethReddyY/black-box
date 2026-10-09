@@ -1,9 +1,11 @@
+diff --git a/scripts/local-db.mjs b/scripts/local-db.mjs
+index f8002ee..190ca1d 100644
 --- a/scripts/local-db.mjs
 +++ b/scripts/local-db.mjs
-@@ -21,11 +21,28 @@
- const root = realpathSync.native(
-   resolve(dirname(fileURLToPath(import.meta.url)), '..'),
- );
+@@ -24,11 +24,34 @@ const root = realpathSync.native(
+ // Consumers and the runner must derive the database name from this same
+ // repository root. A test file's parent directory is not a worktree namespace.
+ export const repositoryRoot = root;
 -const auth = join(homedir(), '.auth', 'amr-local-postgres');
 +class LocalSetupError extends Error {}
 +const ciMode = process.env.AMR_DB_CI_MODE === 'true';
@@ -11,7 +13,9 @@
 +  const value = process.env[name];
 +  if (!value) return fallback;
 +  if (!ciMode || value.includes('..') || !pattern.test(value))
-+    throw new LocalSetupError(`${name} requires a valid CI-owned value and AMR_DB_CI_MODE=true.`);
++    throw new LocalSetupError(
++      `${name} requires a valid CI-owned value and AMR_DB_CI_MODE=true.`,
++    );
 +  return value;
 +}
 +const auth = ciOverride(
@@ -24,15 +28,19 @@
 -const project = 'amr-local-postgres';
 -class LocalSetupError extends Error {}
 +const project = ciOverride(
-+  'AMR_LOCAL_DB_PROJECT', 'amr-local-postgres', /^blackbox-amr-[0-9]+-[0-9]+$/,
++  'AMR_LOCAL_DB_PROJECT',
++  'amr-local-postgres',
++  /^blackbox-amr-[0-9]+-[0-9]+$/,
 +);
 +const composeOverride = ciOverride(
-+  'AMR_LOCAL_DB_COMPOSE_FILE', '', /^\/[^\n]*\/\.github\/blackbox\/amr-ci-compose\.override\.yaml$/,
++  'AMR_LOCAL_DB_COMPOSE_FILE',
++  '',
++  /^\/[^\n]*\/\.github\/blackbox\/amr-ci-compose\.override\.yaml$/,
 +);
  
  export function requireLocalMode(env = process.env) {
    if (env.NODE_ENV && !['development', 'test'].includes(env.NODE_ENV)) {
-@@ -123,6 +140,7 @@
+@@ -129,6 +152,7 @@ function docker(args, config) {
        project,
        '--file',
        join(root, 'compose.yaml'),

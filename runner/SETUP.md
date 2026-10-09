@@ -1,4 +1,10 @@
-# BlackBox runner v0.1: Windows 11 + WSL2
+# BlackBox runner setup
+
+The lifecycle scripts accept native Linux hosts as well as WSL2. The current Ubuntu server is registered as `blackbox-bb-1` with both `blackbox` and the legacy label during migration. The custom label in the current configuration is `blackbox`.
+
+For a persistent Linux service, register the runner first, then follow GitHub's [service setup](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/configure-the-application?platform=linux). Run the service as the non-root account with Docker access. Preserve the project's prerequisite checks and bounded cleanup with `ExecStartPre` calls to `scripts/prereq.sh` and `scripts/cleanup.sh --startup` using the checkout's absolute paths. Never run both the service and `scripts/start.sh` for the same runner.
+
+The sections below preserve the original WSL2 setup procedure.
 
 This directory is a setup skeleton for a Linux GitHub Actions self-hosted runner inside Ubuntu on WSL2. It does not install packages, download the runner, register a runner, create a Windows service, or configure Docker for you.
 
@@ -66,7 +72,7 @@ On the same GitHub page, copy the **registration/configuration commands GitHub g
 The generated Linux command should configure the runner with the custom label and the dedicated job workspace required by this skeleton:
 
 ```text
-./config.sh --url <PASTE_REPOSITORY_URL_FROM_GITHUB> --token <PASTE_SHORT_LIVED_TOKEN_FROM_GITHUB> --labels black-box-linux --work /home/YOUR_USER/.local/share/black-box-runner/work
+./config.sh --url <PASTE_REPOSITORY_URL_FROM_GITHUB> --token <PASTE_SHORT_LIVED_TOKEN_FROM_GITHUB> --labels blackbox --work /home/YOUR_USER/.local/share/black-box-runner/work
 ```
 
 Replace `YOUR_USER` with the Ubuntu username and use the exact URL, token, and any current flags shown by GitHub. If GitHub asks for a runner name, use a local name such as `black-box-wsl2`.
@@ -81,7 +87,7 @@ When registration finishes, verify that `$HOME/actions-runner/run.sh` exists. Th
 The expected workflow routing value requires all four labels, including the default x64 label:
 
 ```yaml
-runs-on: [self-hosted, linux, x64, black-box-linux]
+runs-on: [self-hosted, linux, x64, blackbox]
 ```
 
 A runner must be online and carry every requested label to receive a job. Confirm the label and online state in GitHub before using this `runs-on` value.

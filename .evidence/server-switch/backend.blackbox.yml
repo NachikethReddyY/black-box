@@ -1,0 +1,109 @@
+name: Backend
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend quality
+    runs-on: [self-hosted, linux, x64, blackbox]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck backend packages
+        id: typecheck
+        continue-on-error: true
+        run: pnpm --filter @amr/api typecheck
+
+      - name: Run backend unit tests
+        id: unit
+        continue-on-error: true
+        run: pnpm --filter @amr/api test
+
+      - name: Run AI and activity tests
+        id: ai_activity
+        continue-on-error: true
+        run: pnpm ai:test && pnpm activity:test
+
+      - name: Run route and awards tests
+        id: routes_awards
+        continue-on-error: true
+        run: pnpm route:test && pnpm awards:test
+
+      - name: Run report and impact tests
+        id: reports_impact
+        continue-on-error: true
+        run: pnpm reports:test && pnpm impact:test
+
+      - name: Check formatting and tooling
+        id: style_tooling
+        continue-on-error: true
+        run: |
+          pnpm exec prettier --check services/api packages/contracts packages/travel-domain
+          pnpm test:tooling
+
+      - name: Run source security checks
+        id: security
+        continue-on-error: true
+        run: |
+          pnpm security:secrets
+          pnpm security:sast
+
+      - name: Publish backend quality result
+        if: always()
+        env:
+          TYPECHECK: ${{ steps.typecheck.outcome }}
+          UNIT: ${{ steps.unit.outcome }}
+          AI_ACTIVITY: ${{ steps.ai_activity.outcome }}
+          ROUTES_AWARDS: ${{ steps.routes_awards.outcome }}
+          REPORTS_IMPACT: ${{ steps.reports_impact.outcome }}
+          STYLE_TOOLING: ${{ steps.style_tooling.outcome }}
+          SECURITY: ${{ steps.security.outcome }}
+        run: |
+          set -u
+          passed=0
+          total=7
+          for result in "$TYPECHECK" "$UNIT" "$AI_ACTIVITY" "$ROUTES_AWARDS" "$REPORTS_IMPACT" "$STYLE_TOOLING" "$SECURITY"; do
+            if [ "$result" = success ]; then passed=$((passed + 1)); fi
+          done
+          if [ "$passed" -eq "$total" ]; then
+            status='PASS'
+          else
+            status='FAIL'
+          fi
+          {
+            echo "## Backend quality: $status"
+            echo
+            echo "Checks passed: $passed/$total"
+            echo
+            echo '| Check | Result |'
+            echo '| --- | --- |'
+            echo "| Typecheck | $TYPECHECK |"
+            echo "| Unit tests | $UNIT |"
+            echo "| AI and activity tests | $AI_ACTIVITY |"
+            echo "| Route and awards tests | $ROUTES_AWARDS |"
+            echo "| Report and impact tests | $REPORTS_IMPACT |"
+            echo "| Formatting and tooling | $STYLE_TOOLING |"
+            echo "| Source security | $SECURITY |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$status" = PASS ]

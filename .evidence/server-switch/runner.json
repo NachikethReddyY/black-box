@@ -1,0 +1,33 @@
+{
+  "id": 22,
+  "name": "blackbox-bb-1",
+  "status": "online",
+  "busy": false,
+  "labels": [
+    {
+      "id": 0,
+      "name": "self-hosted",
+      "type": "read-only"
+    },
+    {
+      "id": 0,
+      "name": "Linux",
+      "type": "read-only"
+    },
+    {
+      "id": 0,
+      "name": "X64",
+      "type": "read-only"
+    },
+    {
+      "id": 0,
+      "name": "black-box-linux",
+      "type": "custom"
+    },
+    {
+      "id": 0,
+      "name": "blackbox",
+      "type": "custom"
+    }
+  ]
+}

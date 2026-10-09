@@ -74,7 +74,7 @@ def request(url: str, token: str, method: str = "GET", body: dict[str, Any] | No
         url,
         data=data,
         method=method,
-        headers={"Authorization": f"Bearer {token}", "Accept": "application/json", "Content-Type": "application/json"},
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json", "Content-Type": "application/json", "User-Agent": "Black-Box-CI"},
     )
     try:
         with urllib.request.urlopen(req, timeout=20) as response:

@@ -106,6 +106,18 @@ test('unknown actor and fork code never enter the queue', async () => {
   assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM requests').get()?.n, 0);
   f.sqlite.close();
 });
+test('reconciliation records known HTTP status codes but never arbitrary error contents', async () => {
+  const f = fixture();
+  await webhook(f.env);
+  f.github.getPullRequest = async () => { throw new Error('GitHub installation token failed with status 403'); };
+  await tick(f.deps);
+  assert.equal(f.sqlite.prepare('SELECT last_error FROM requests').get()?.last_error, 'reconciliation_failed:github_http_403');
+  f.advance();
+  f.github.getPullRequest = async () => { throw new Error('private-token-value'); };
+  await tick(f.deps);
+  assert.equal(f.sqlite.prepare('SELECT last_error FROM requests').get()?.last_error, 'reconciliation_failed_retry_next_minute');
+  f.sqlite.close();
+});
 test('unresolved merge and busy home stay durable and queued, then resume once ready', async () => {
   const f = fixture();
   await webhook(f.env);
