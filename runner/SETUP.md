@@ -115,6 +115,8 @@ These commands act only when you invoke them explicitly:
 
 For native Ubuntu, copy `config/black-box-runner.service.example` to `~/.config/systemd/user/black-box-runner.service` after interactive registration, replace `%h` only if your systemd version requires an absolute path, then run `systemctl --user daemon-reload && systemctl --user enable --now black-box-runner.service`. Keep the service user-scoped or owned by a dedicated unprivileged account. For WSL2, start the runner with the existing helper or a tested Windows startup task. Neither option changes GitHub's outbound-only connection model.
 
+When the service file is used, keep the project's prerequisite checks and bounded cleanup as `ExecStartPre` calls (`scripts/prereq.sh` and `scripts/cleanup.sh --startup` using the checkout's absolute paths). Never run both the systemd service and `scripts/start.sh` for the same runner.
+
 ## Black Box CLI for agent-triggered runs
 
 The CLI queues the same trusted workflow without opening a pull request. It sends repository metadata and an exact commit SHA to the Worker. The Worker stores a durable manual request, and the existing reconciliation schedule dispatches it to the home runner.
